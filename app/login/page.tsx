@@ -1,96 +1,99 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) { setError('Please enter your email'); return; }
+    if (!password)     { setError('Please enter your password'); return; }
     setLoading(true);
     setError('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
-      // Redirect based on role
+      if (!res.ok) {
+        if (res.status === 401) setError('Wrong email or password. Please try again.');
+        else setError(data.error || 'Login failed. Please try again.');
+        return;
+      }
       if (data.user?.role === 'admin' || data.user?.role === 'manager') {
         router.push('/');
       } else {
         router.push('/home');
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch {
+      setError('Network error. Check your internet connection.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4"
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-base">G</span>
-          </div>
+        <div className="flex items-center justify-center gap-2.5 mb-8">
+          <img src="/logo.png" alt="Gharpayy" className="h-10 w-auto" onError={e => { (e.target as any).style.display='none'; }} />
           <span className="text-2xl font-bold text-orange-500">Gharpayy</span>
         </div>
-
-        <div className="bg-white rounded-3xl border border-gray-200 p-8">
-          <h2 className="text-xl font-bold text-gray-800 mb-1">Welcome back</h2>
-          <p className="text-sm text-gray-500 mb-6">Sign in to your attendance dashboard</p>
-
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
+          <h2 className="text-xl font-bold text-gray-800 mb-1">Welcome back 👋</h2>
+          <p className="text-sm text-gray-500 mb-6">Sign in to mark your attendance</p>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3 mb-4">
-              {error}
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3.5 mb-5">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
-
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@gharpayy.com"
-                required
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
+              <input type="email" value={email} onChange={e => { setEmail(e.target.value); setError(''); }}
+                placeholder="you@gharpayy.com" autoComplete="email" autoFocus
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 transition" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+              <div className="relative">
+                <input type={showPass ? 'text' : 'password'} value={password}
+                  onChange={e => { setPassword(e.target.value); setError(''); }}
+                  placeholder="••••••••" autoComplete="current-password"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 transition" />
+                <button type="button" onClick={() => setShowPass(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-orange-500 text-white py-2.5 rounded-xl font-medium text-sm hover:bg-orange-600 transition disabled:opacity-60"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
+            <button type="submit" disabled={loading}
+              className="w-full bg-orange-500 text-white py-3 rounded-xl font-semibold text-sm hover:bg-orange-600 active:scale-[0.98] transition disabled:opacity-60 shadow-sm">
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Signing in...
+                </span>
+              ) : 'Sign In'}
             </button>
           </form>
         </div>
-
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Gharpayy Attendance System · {new Date().getFullYear()}
-        </p>
+        <p className="text-center text-xs text-gray-400 mt-6">Gharpayy Attendance · {new Date().getFullYear()}</p>
+        <p className="text-center text-xs text-gray-500 mt-3">New to Gharpayy? <a href="/signup" className="text-orange-500 hover:underline font-semibold">Sign up here</a></p>
       </div>
     </div>
   );

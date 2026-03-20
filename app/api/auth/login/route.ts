@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
 
+    // Check if employee is approved
+    if (user.role === 'employee' && !user.isApproved) {
+      return NextResponse.json({ error: 'Your account is pending admin approval' }, { status: 403 });
+    }
+
     const token = signToken({ id: user._id.toString(), email: user.email, fullName: user.fullName, role: user.role });
     const res = NextResponse.json({ ok: true, user: { id: user._id.toString(), email: user.email, fullName: user.fullName, role: user.role } });
     res.cookies.set(COOKIE_NAME, token, COOKIE_OPTIONS);

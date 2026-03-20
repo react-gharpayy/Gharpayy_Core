@@ -1,20 +1,17 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
-import Header from '@/components/header';
-import Navigation from '@/components/navigation';
-import EmployeeDetail from '@/components/employee-detail';
+import EmployeeNav from '@/components/employee-nav';
+import EmployeeHome from '@/components/employee-home';
 
 export default async function ClockPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
-  if (user.role === 'employee') redirect('/home');
+  if (user.role !== 'employee') redirect('/');
+
   return (
-    <main className="min-h-screen bg-gray-50">
-      <Header />
-      <Navigation />
-      <div className="max-w-2xl mx-auto px-4 py-6 md:py-8">
-        <EmployeeDetail />
-      </div>
-    </main>
+    <>
+      <EmployeeNav />
+      <EmployeeHome user={user} />
+    </>
   );
 }

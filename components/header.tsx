@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { LogOut, Users } from 'lucide-react';
 
 export default function Header() {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<{ fullName: string; role: string } | null>(null);
 
   useEffect(() => {
@@ -19,32 +20,32 @@ export default function Header() {
     router.push('/login');
   };
 
+  const isAdmin = user?.role === 'admin';
+  const isEmployeesActive = pathname === '/admin';
+
   return (
     <header className="bg-white border-b border-gray-200">
       <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
-        {/* Logo */}
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">G</span>
-          </div>
-          <span className="text-xl font-bold text-orange-500">Gharpayy</span>
+          <img src="/logo.png" alt="Gharpayy" className="h-10 w-auto"
+            onError={e => { (e.target as any).style.display='none'; }} />
         </div>
-
-        {/* Right */}
-        <div className="flex items-center gap-3">
-          {user && (
-            <span className="text-sm text-gray-500 hidden md:block">
-              {user.fullName} · <span className="capitalize">{user.role}</span>
-            </span>
-          )}
-          <button
-            onClick={logout}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-500 transition border border-gray-200 rounded-lg px-3 py-1.5"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
+        {isAdmin && (
+          <button onClick={() => router.push('/admin')}
+            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-1.5 rounded-full transition ${
+              isEmployeesActive
+                ? 'bg-orange-500 text-white'
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100 border border-orange-200'
+            }`}>
+            <Users className="w-4 h-4" />
+            Employees
           </button>
-        </div>
+        )}
+        <button onClick={logout}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-500 transition border border-gray-200 rounded-lg px-3 py-1.5">
+          <LogOut className="w-4 h-4" />
+          Logout
+        </button>
       </div>
     </header>
   );
