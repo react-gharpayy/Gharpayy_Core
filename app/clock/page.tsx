@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
-import EmployeeNav from '@/components/employee-nav';
 import EmployeeHome from '@/components/employee-home';
 
 export default async function ClockPage() {
@@ -8,10 +7,5 @@ export default async function ClockPage() {
   if (!user) redirect('/login');
   if (user.role !== 'employee') redirect('/');
 
-  return (
-    <>
-      <EmployeeNav />
-      <EmployeeHome user={user} />
-    </>
-  );
+  return <EmployeeHome user={user} />;
 }

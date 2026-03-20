@@ -13,6 +13,28 @@ interface AttStatus {
   timeline: { time: string; label: string; type: string }[];
 }
 
+const IST_24H_OPTIONS: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'Asia/Kolkata',
+};
+
+const IST_MERIDIEM_OPTIONS: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  hour12: true,
+  timeZone: 'Asia/Kolkata',
+};
+
+function fmtIST24(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-IN', IST_24H_OPTIONS);
+}
+
+function fmtISTMeridiem(iso: string) {
+  const parts = new Intl.DateTimeFormat('en-IN', IST_MERIDIEM_OPTIONS).formatToParts(new Date(iso));
+  return parts.find((p) => p.type === 'dayPeriod')?.value?.toUpperCase() || '';
+}
+
 export default function EmployeeDetail({ employeeId }: { employeeId?: string }) {
   const [att, setAtt] = useState<AttStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,10 +104,10 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
             <div className="flex justify-center mb-6">
               <div className="flex flex-col items-center justify-center w-28 h-28 rounded-full border-4 border-gray-300 bg-white">
                 <span className="text-2xl md:text-3xl font-bold text-gray-800">
-                  {att?.firstCheckIn ? new Date(att.firstCheckIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
+                  {att?.firstCheckIn ? fmtIST24(att.firstCheckIn) : '--:--'}
                 </span>
                 <span className="text-gray-400 text-xs mt-1">
-                  {att?.firstCheckIn ? (new Date(att.firstCheckIn).getHours() < 12 ? 'AM' : 'PM') : ''}
+                  {att?.firstCheckIn ? fmtISTMeridiem(att.firstCheckIn) : ''}
                 </span>
               </div>
             </div>

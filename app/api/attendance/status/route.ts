@@ -10,7 +10,16 @@ function getISTDate() {
 }
 
 function fmtTime(d: Date) {
-  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[1]
+    .substring(0, 5)
+    .replace(/^(\d{2}):(\d{2})/, (_, h, m) => {
+      const hour = parseInt(h);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const h12 = hour % 12 || 12;
+      return `${h12}:${m} ${ampm}`;
+    });
 }
 
 function fmtMins(m: number) {

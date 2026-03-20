@@ -18,22 +18,28 @@ const STATUS_COLOR: Record<DayStatus, string> = {
   'none':     'bg-gray-200',
 };
 
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+function getISTShiftedNow() {
+  return new Date(Date.now() + IST_OFFSET_MS);
+}
+
 function getWeekDates() {
-  const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const now = getISTShiftedNow();
+  const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  mon.setUTCDate(mon.getUTCDate() - ((now.getUTCDay() + 6) % 7));
   return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, i) => {
     const d = new Date(mon);
-    d.setDate(mon.getDate() + i);
-    return { label, date: d.toLocaleDateString('en-CA') };
+    d.setUTCDate(mon.getUTCDate() + i);
+    return { label, date: d.toISOString().split('T')[0] };
   });
 }
 
 function getWeekStr() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const start = new Date(year, 0, 1);
-  const week = Math.ceil(((now.getTime() - start.getTime()) / 86400000 + start.getDay() + 1) / 7);
+  const now = getISTShiftedNow();
+  const year = now.getUTCFullYear();
+  const start = new Date(Date.UTC(year, 0, 1));
+  const week = Math.ceil(((now.getTime() - start.getTime()) / 86400000 + start.getUTCDay() + 1) / 7);
   return `${year}-${String(week).padStart(2, '0')}`;
 }
 
@@ -44,7 +50,7 @@ export default function WeeklyHeatmap() {
   const [loading, setLoading] = useState(true);
 
   const weekDays = getWeekDates();
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = getISTShiftedNow().toISOString().split('T')[0];
 
   useEffect(() => {
     fetch(`/api/attendance/heatmap?week=${getWeekStr()}`, { cache: 'no-store' })

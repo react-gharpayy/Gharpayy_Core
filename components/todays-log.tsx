@@ -51,6 +51,15 @@ function fmtMins(m: number) {
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
+function fmtISTTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
 export default function TodaysLog() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [present, setPresent] = useState(0);
@@ -200,8 +209,8 @@ export default function TodaysLog() {
                       {/* Stats grid */}
                       <div className="grid grid-cols-2 gap-3">
                         {[
-                          { label: 'Clocked In',  value: drill.attendance.firstCheckIn ? new Date(drill.attendance.firstCheckIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--' },
-                          { label: 'Clocked Out', value: drill.attendance.lastCheckOut  ? new Date(drill.attendance.lastCheckOut).toLocaleTimeString('en-IN',  { hour: '2-digit', minute: '2-digit', hour12: true }) : drill.attendance.isCheckedIn ? 'Still active' : '--' },
+                          { label: 'Clocked In',  value: drill.attendance.firstCheckIn ? fmtISTTime(drill.attendance.firstCheckIn) : '--' },
+                          { label: 'Clocked Out', value: drill.attendance.lastCheckOut  ? fmtISTTime(drill.attendance.lastCheckOut) : drill.attendance.isCheckedIn ? 'Still active' : '--' },
                           { label: 'Total Worked', value: drill.attendance.totalWorkFormatted },
                           { label: 'Sessions',    value: String(drill.attendance.sessions) },
                         ].map(s => (

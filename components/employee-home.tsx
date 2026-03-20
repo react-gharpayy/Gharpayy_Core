@@ -1,10 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Clock, CheckCircle, XCircle, MapPin } from 'lucide-react';
+import { LogOut, Clock, CheckCircle, XCircle, MapPin, Menu, X, Home, User, Bell } from 'lucide-react';
+import EmployeeNav from '@/components/employee-nav';
 import NoticesEmployee from '@/components/notices-employee';
 
 interface User { id: string; email: string; fullName: string; role: string; }
+
+const MOBILE_TABS = [
+  { label: 'Home', href: '/home', icon: Home },
+  { label: 'My Attendance', href: '/clock', icon: Clock },
+  { label: 'My Profile', href: '/profile', icon: User },
+  { label: 'Notices', href: '/notices', icon: Bell },
+];
 
 function initials(name: string) {
   return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
@@ -19,12 +27,13 @@ function fmtMins(m: number) {
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', {
-    hour: '2-digit', minute: '2-digit', hour12: true,
+    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
   });
 }
 
 export default function EmployeeHome({ user }: { user: User }) {
   const router = useRouter();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [att, setAtt] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [clocking, setClocking] = useState(false);
@@ -121,7 +130,7 @@ export default function EmployeeHome({ user }: { user: User }) {
 
   const isIn = att?.isCheckedIn;
   const today = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long', day: 'numeric', month: 'long',
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata',
   });
 
   // Determine clear status text
@@ -154,15 +163,49 @@ export default function EmployeeHome({ user }: { user: User }) {
             </div>
             <span className="text-lg font-bold text-orange-500">Gharpayy</span>
           </div>
-          <button
-            onClick={logout}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-500 border border-gray-200 rounded-lg px-3 py-1.5 transition"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Logout
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={logout}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-500 border border-gray-200 rounded-lg px-3 py-1.5 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="md:hidden text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg p-2 transition"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
       </header>
+
+      {mobileMenuOpen && (
+        <div className="md:hidden bg-white border-b border-gray-200">
+          {MOBILE_TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.href}
+                onClick={() => {
+                  router.push(tab.href);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+              >
+                <Icon className="w-5 h-5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="hidden md:block">
+        <EmployeeNav />
+      </div>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
 

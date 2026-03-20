@@ -4,6 +4,17 @@ import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
 
+const IST_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+  timeZone: 'Asia/Kolkata',
+};
+
+function fmtTime(d: Date) {
+  return d.toLocaleTimeString('en-IN', IST_TIME_OPTIONS);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -72,7 +83,7 @@ export async function GET(req: NextRequest) {
           employeeName: u.fullName,
           role: u.role,
           checkInTime: lastSession?.checkIn
-            ? new Date(lastSession.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+            ? fmtTime(new Date(lastSession.checkIn))
             : null,
           isCheckedIn: att?.isCheckedIn || false,
           dayStatus: att?.dayStatus || 'Absent',

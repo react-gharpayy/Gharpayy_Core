@@ -9,6 +9,17 @@ function getISTDate() {
   return new Date(now.getTime() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
 }
 
+const IST_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+  timeZone: 'Asia/Kolkata',
+};
+
+function fmtTime(d: Date) {
+  return d.toLocaleTimeString('en-IN', IST_TIME_OPTIONS);
+}
+
 export async function GET() {
   try {
     const user = await getAuthUser();
@@ -31,7 +42,7 @@ export async function GET() {
         employeeName: u.fullName,
         role: u.role,
         checkInTime: lastSession?.checkIn
-          ? new Date(lastSession.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+          ? fmtTime(new Date(lastSession.checkIn))
           : null,
         isCheckedIn: att?.isCheckedIn || false,
         dayStatus: att?.dayStatus || 'Absent',

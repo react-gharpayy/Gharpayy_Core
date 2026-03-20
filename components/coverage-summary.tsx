@@ -21,11 +21,31 @@ export default function CoverageSummary() {
     ? Math.round(employees.filter((e: any) => e.dayStatus === 'On Time' || e.dayStatus === 'Early').length / total * 100)
     : 0;
 
-  const avgMs = employees.filter((e: any) => e.checkInTime).reduce((s: number, e: any, _: any, a: any[]) => {
-    const t = new Date(`1970-01-01 ${e.checkInTime}`);
-    return s + t.getTime() / a.length;
-  }, 0);
-  const avgStr = avgMs ? new Date(avgMs).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--';
+  const parseIST12h = (value: string) => {
+    const m = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!m) return null;
+    const h12 = Number(m[1]);
+    const mins = Number(m[2]);
+    const meridiem = m[3].toUpperCase();
+    const h24 = (h12 % 12) + (meridiem === 'PM' ? 12 : 0);
+    return h24 * 60 + mins;
+  };
+
+  const formatIST12h = (totalMinutes: number) => {
+    const h24 = Math.floor(totalMinutes / 60) % 24;
+    const mins = String(totalMinutes % 60).padStart(2, '0');
+    const ampm = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 % 12 || 12;
+    return `${h12}:${mins} ${ampm}`;
+  };
+
+  const parsedTimes = employees
+    .map((e: any) => (e.checkInTime ? parseIST12h(e.checkInTime) : null))
+    .filter((t): t is number => t !== null);
+  const avgMinutes = parsedTimes.length
+    ? Math.round(parsedTimes.reduce((sum, t) => sum + t, 0) / parsedTimes.length)
+    : null;
+  const avgStr = avgMinutes !== null ? formatIST12h(avgMinutes) : '--';
 
   // Group by role as "zone"
   const roles = [...new Set(employees.map((e: any) => e.role || 'employee'))] as string[];
