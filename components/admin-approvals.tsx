@@ -14,6 +14,14 @@ interface Employee {
   createdAt: string;
 }
 
+// IST formatted date
+function fmtDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
 export default function AdminApprovals() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,7 +171,9 @@ export default function AdminApprovals() {
                       <h3 className="font-semibold text-gray-800 text-sm">{emp.fullName}</h3>
                       <p className="text-xs text-gray-500">{emp.email}</p>
                     </div>
-                    {emp.isApproved && <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">Approved</span>}
+                    {emp.isApproved && (
+                      <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">Approved</span>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
@@ -196,14 +206,15 @@ export default function AdminApprovals() {
                     </div>
                     <div>
                       <p className="text-gray-500">Applied</p>
-                      <p className="font-medium text-gray-700">{new Date(emp.createdAt).toLocaleDateString()}</p>
+                      {/* FIXED: was new Date().toLocaleDateString() with no timezone */}
+                      <p className="font-medium text-gray-700">{fmtDate(emp.createdAt)}</p>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 mt-4 ml-18">
+              <div className="flex gap-2 mt-4">
                 {!emp.isApproved ? (
                   <>
                     <button onClick={() => handleApprove(emp._id)} disabled={approving === emp._id}

@@ -5,15 +5,17 @@ export interface IOfficeZone extends Document {
   latitude?: number;
   longitude?: number;
   radiusMeters?: number;
+  weekOffDay?: string;
   createdAt: Date;
 }
 
 const OfficeZoneSchema = new Schema<IOfficeZone>({
-  name: { type: String, required: true, trim: true },
-  latitude: { type: Number },
-  longitude: { type: Number },
+  name:         { type: String, required: true, trim: true },
+  latitude:     { type: Number },
+  longitude:    { type: Number },
   radiusMeters: { type: Number },
-  createdAt: { type: Date, default: Date.now },
+  weekOffDay:   { type: String, default: 'Tuesday' }, // Mon/Tue/Wed/Thu/Fri/Sat/Sun
+  createdAt:    { type: Date, default: Date.now },
 });
 
 export default mongoose.models.GpOfficeZone || mongoose.model<IOfficeZone>('GpOfficeZone', OfficeZoneSchema);

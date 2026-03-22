@@ -37,8 +37,8 @@ export async function GET() {
       targetId: n.targetId,
       targetName: n.targetName,
       createdBy: n.createdBy,
-      createdByName: n.createdByName,
-      isRead: n.readBy.includes(user.id),
+      createdByName: n.createdByName || 'Admin',
+      isRead: Array.isArray(n.readBy) ? n.readBy.includes(user.id) : false,
       createdAt: n.createdAt,
     }));
 
@@ -98,8 +98,10 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { id } = await req.json();
+    if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
     await connectDB();
-    await Notice.findByIdAndDelete(id);
+    const deleted = await Notice.findByIdAndDelete(id);
+    if (!deleted) return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Clock, CheckCircle, XCircle, ChevronRight, X } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, ChevronRight, X, Calendar, Info } from 'lucide-react';
 
 interface Employee {
   employeeId: string;
   employeeName: string;
   role: string;
+  team: string;
   checkInTime: string | null;
   isCheckedIn: boolean;
   dayStatus: 'Early' | 'On Time' | 'Late' | 'Absent';
@@ -40,7 +41,7 @@ function initials(name: string) {
 }
 
 function statusStyle(status: string) {
-  if (status === 'Early')   return 'bg-blue-100 text-blue-700';
+  if (status === 'Early')   return 'bg-teal-100 text-teal-700';
   if (status === 'On Time') return 'bg-green-100 text-green-700';
   if (status === 'Late')    return 'bg-yellow-100 text-yellow-700';
   return 'bg-gray-100 text-gray-500';
@@ -53,11 +54,12 @@ function fmtMins(m: number) {
 
 function fmtISTTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Asia/Kolkata',
+    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
   });
+}
+
+function getTodayIST() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
 }
 
 export default function TodaysLog() {
@@ -67,18 +69,45 @@ export default function TodaysLog() {
   const [loading, setLoading] = useState(true);
   const [drill, setDrill] = useState<DrillDown | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(getTodayIST());
+  const [shiftInfo, setShiftInfo] = useState<any>(null);
 
-  useEffect(() => {
-    fetch('/api/attendance/heatmap', { cache: 'no-store' })
+  const fetchLog = (date: string) => {
+    setLoading(true);
+    fetch(`/api/attendance/heatmap?date=${date}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
-        if (d.todayLog) setEmployees(d.todayLog);
+       if (d.todayLog) {
+  const order: Record<string, number> = {
+    'Early': 0, 'On Time': 1, 'Late': 2, 'Absent': 3
+  };
+  const sorted = [...d.todayLog].sort((a: any, b: any) => {
+    // First sort by status
+    const statusDiff = (order[a.dayStatus] ?? 3) - (order[b.dayStatus] ?? 3);
+    if (statusDiff !== 0) return statusDiff;
+    // Then sort by check-in time within same status
+    if (!a.checkInTime && !b.checkInTime) return 0;
+    if (!a.checkInTime) return 1;
+    if (!b.checkInTime) return -1;
+    return a.checkInTime.localeCompare(b.checkInTime);
+  });
+  setEmployees(sorted);
+}
         if (d.present !== undefined) setPresent(d.present);
         if (d.total !== undefined) setTotal(d.total);
+        if (d.shiftInfo) setShiftInfo(d.shiftInfo);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchLog(selectedDate); }, []);
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const date = e.target.value;
+    setSelectedDate(date);
+    fetchLog(date);
+  };
 
   const openDrillDown = async (empId: string) => {
     setDrillLoading(true);
@@ -91,27 +120,65 @@ export default function TodaysLog() {
     setDrillLoading(false);
   };
 
+  const isToday = selectedDate === getTodayIST();
+
   return (
     <>
       <div className="bg-white rounded-3xl border border-gray-300 p-6 md:p-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Clock className="w-6 h-6 text-orange-500" />
             <h2 className="text-xl md:text-2xl font-bold text-gray-800">Attendance</h2>
           </div>
           <span className="text-gray-500 text-sm md:text-base">
-            Today · <strong className="text-gray-800">{present}/{total} present</strong>
+            {isToday ? 'Today' : selectedDate} · <strong className="text-gray-800">{present}/{total} present</strong>
           </span>
         </div>
 
-        <h3 className="text-gray-600 text-sm font-medium mb-4">Today's Log — click any employee for details</h3>
+        {/* Date picker */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 flex-1">
+            <Calendar className="w-4 h-4 text-orange-500 flex-shrink-0" />
+            <input
+              type="date"
+              value={selectedDate}
+              max={getTodayIST()}
+              onChange={handleDateChange}
+              className="bg-transparent text-sm text-gray-700 focus:outline-none w-full"
+            />
+          </div>
+          {!isToday && (
+            <button
+              onClick={() => { setSelectedDate(getTodayIST()); fetchLog(getTodayIST()); }}
+              className="text-xs text-orange-500 font-medium px-3 py-2 border border-orange-200 rounded-xl hover:bg-orange-50 transition whitespace-nowrap"
+            >
+              Today
+            </button>
+          )}
+        </div>
+
+        {/* Shift timing info */}
+        {shiftInfo && (
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-2.5 mb-4">
+            <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
+            <p className="text-xs text-blue-700">
+              <strong>Shift:</strong> Early = before {shiftInfo.earlyBefore} &nbsp;·&nbsp;
+              On Time = till {shiftInfo.onTimeTill} &nbsp;·&nbsp;
+              Late = after {shiftInfo.lateAfter}
+            </p>
+          </div>
+        )}
+
+        <h3 className="text-gray-600 text-sm font-medium mb-4">
+          {isToday ? "Today's Log" : `Log for ${selectedDate}`} — sorted Early first · click for details
+        </h3>
 
         {loading ? (
           <div className="space-y-3 animate-pulse">
             {[1,2,3,4].map(i => <div key={i} className="h-16 bg-gray-100 rounded-xl"/>)}
           </div>
         ) : employees.length === 0 ? (
-          <p className="text-center text-gray-400 py-8 text-sm">No employee records found</p>
+          <p className="text-center text-gray-400 py-8 text-sm">No records for this date</p>
         ) : (
           <div className="space-y-2">
             {employees.map(emp => {
@@ -128,7 +195,7 @@ export default function TodaysLog() {
                     </div>
                     <div>
                       <p className="font-medium text-gray-800 text-sm">{emp.employeeName}</p>
-                      <p className="text-xs text-gray-500 capitalize">{emp.role}</p>
+                      <p className="text-xs text-gray-400">{emp.team || emp.role}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -161,7 +228,6 @@ export default function TodaysLog() {
               </div>
             ) : drill && (
               <>
-                {/* Modal header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-100">
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-full ${COLORS[colorIdx(drill.employee.fullName)]} flex items-center justify-center text-sm font-bold ${TEXT_COLORS[colorIdx(drill.employee.fullName)]}`}>
@@ -184,16 +250,13 @@ export default function TodaysLog() {
                       <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
                         <XCircle className="w-6 h-6 text-red-400"/>
                       </div>
-                      <p className="font-semibold text-gray-700">Absent Today</p>
-                      <p className="text-sm text-gray-400 mt-1">No attendance record for today</p>
+                      <p className="font-semibold text-gray-700">Absent</p>
+                      <p className="text-sm text-gray-400 mt-1">No attendance record for this date</p>
                     </div>
                   ) : (
                     <>
-                      {/* Status badge */}
                       <div className={`flex items-center justify-between p-4 rounded-2xl border ${
-                        drill.attendance.isCheckedIn
-                          ? 'bg-green-50 border-green-200'
-                          : 'bg-gray-50 border-gray-200'
+                        drill.attendance.isCheckedIn ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
                       }`}>
                         <div>
                           <p className="text-xs text-gray-500 mb-0.5">Current Status</p>
@@ -206,13 +269,12 @@ export default function TodaysLog() {
                         </span>
                       </div>
 
-                      {/* Stats grid */}
                       <div className="grid grid-cols-2 gap-3">
                         {[
-                          { label: 'Clocked In',  value: drill.attendance.firstCheckIn ? fmtISTTime(drill.attendance.firstCheckIn) : '--' },
-                          { label: 'Clocked Out', value: drill.attendance.lastCheckOut  ? fmtISTTime(drill.attendance.lastCheckOut) : drill.attendance.isCheckedIn ? 'Still active' : '--' },
+                          { label: 'Clocked In',   value: drill.attendance.firstCheckIn ? fmtISTTime(drill.attendance.firstCheckIn) : '--' },
+                          { label: 'Clocked Out',  value: drill.attendance.lastCheckOut ? fmtISTTime(drill.attendance.lastCheckOut) : drill.attendance.isCheckedIn ? 'Still active' : '--' },
                           { label: 'Total Worked', value: drill.attendance.totalWorkFormatted },
-                          { label: 'Sessions',    value: String(drill.attendance.sessions) },
+                          { label: 'Sessions',     value: String(drill.attendance.sessions) },
                         ].map(s => (
                           <div key={s.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                             <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">{s.label}</p>
@@ -221,7 +283,6 @@ export default function TodaysLog() {
                         ))}
                       </div>
 
-                      {/* Timeline */}
                       {drill.attendance.timeline.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Timeline</p>

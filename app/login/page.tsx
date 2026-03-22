@@ -23,10 +23,15 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
-      const data = await res.json();
+      let data: any = null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      }
       if (!res.ok) {
         if (res.status === 401) setError('Wrong email or password. Please try again.');
-        else setError(data.error || 'Login failed. Please try again.');
+        else if (res.status === 404) setError('Login API route not found. Restart the app server on port 3005.');
+        else setError(data?.error || 'Login failed. Please try again.');
         return;
       }
       if (data.user?.role === 'admin' || data.user?.role === 'manager') {
@@ -35,7 +40,7 @@ export default function LoginPage() {
         router.push('/home');
       }
     } catch {
-      setError('Network error. Check your internet connection.');
+      setError('Unable to reach login service. Please restart the app server and try again.');
     } finally {
       setLoading(false);
     }

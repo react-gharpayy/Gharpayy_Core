@@ -36,7 +36,10 @@ const TYPE_STYLES = {
 };
 
 function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  // IST-aware time ago
+  const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const created = new Date(new Date(dateStr).getTime() + 5.5 * 60 * 60 * 1000);
+  const diff = now.getTime() - created.getTime();
   const m = Math.floor(diff / 60000);
   const h = Math.floor(m / 60);
   const d = Math.floor(h / 24);
@@ -54,7 +57,8 @@ export default function NoticesEmployee() {
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
-    fetch('/api/notices', { cache: 'no-store' })
+    // FIXED: was /api/notices (wrong) — correct route is /api/notice
+    fetch('/api/notice', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
         if (d.notices) setNotices(d.notices);
@@ -67,7 +71,7 @@ export default function NoticesEmployee() {
   const markRead = async (id: string) => {
     setNotices(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
-    await fetch('/api/notices/read', {
+    await fetch('/api/notice/read', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
@@ -156,7 +160,6 @@ export default function NoticesEmployee() {
                   : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0"/>}
               </div>
 
-              {/* Expanded message */}
               {isOpen && (
                 <div className="px-4 pb-4 pt-1 border-t border-current border-opacity-10">
                   <p className="text-sm text-gray-700 leading-relaxed">{notice.message}</p>

@@ -2,18 +2,53 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
+import OfficeZone from '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
 
 const IST_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: true,
-  timeZone: 'Asia/Kolkata',
+  hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
 };
 
 function fmtTime(d: Date) {
   return d.toLocaleTimeString('en-IN', IST_TIME_OPTIONS);
 }
+
+function getISTNow() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+}
+
+function getTodayIST() {
+  return getISTNow().toISOString().split('T')[0];
+}
+
+function statusSortOrder(status: string): number {
+  if (status === 'Early')   return 0;
+  if (status === 'On Time') return 1;
+  if (status === 'Late')    return 2;
+  return 3;
+}
+
+function getWeekDatesFromStr(weekStr: string): string[] {
+  const [year, weekNum] = weekStr.split('-').map(Number);
+  const jan1 = new Date(Date.UTC(year, 0, 1));
+  const jan1Day = jan1.getUTCDay();
+  const mondayOfWeek1 = new Date(jan1);
+  mondayOfWeek1.setUTCDate(jan1.getUTCDate() + (jan1Day === 0 ? 1 : jan1Day === 1 ? 0 : 8 - jan1Day));
+  const monday = new Date(mondayOfWeek1);
+  monday.setUTCDate(mondayOfWeek1.getUTCDate() + (weekNum - 1) * 7);
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setUTCDate(monday.getUTCDate() + i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+
+const WEEK_OFF_LABEL: Record<string, string> = {
+  Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed',
+  Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun',
+};
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,95 +56,105 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const week = searchParams.get('week'); // YYYY-WW
+    const week   = searchParams.get('week');
+    const date   = searchParams.get('date');
+    const teamId = searchParams.get('team');
 
     await connectDB();
 
     const isManager = user.role === 'admin' || user.role === 'manager';
+    const todayStr  = getTodayIST();
+    const logDate   = date || todayStr;
 
-    // Get week dates
-    function getWeekDates(weekStr: string) {
-      const [year, week] = weekStr.split('-').map(Number);
-      const jan1 = new Date(year, 0, 1);
-      const dayOfWeek = jan1.getDay() || 7;
-      const startOfWeek1 = new Date(jan1);
-      startOfWeek1.setDate(jan1.getDate() + (dayOfWeek <= 4 ? 1 - dayOfWeek : 8 - dayOfWeek));
-      const startDate = new Date(startOfWeek1);
-      startDate.setDate(startOfWeek1.getDate() + (week - 1) * 7);
-      const dates: string[] = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(startDate);
-        d.setDate(startDate.getDate() + i);
-        dates.push(d.toISOString().split('T')[0]);
-      }
-      return dates;
-    }
+    // Get week off day from DB
+    const zone         = await OfficeZone.findOne({}).lean() as any;
+    const weekOffDay   = zone?.weekOffDay || 'Tuesday';
+    const weekOffLabel = WEEK_OFF_LABEL[weekOffDay] || 'Tue';
 
-    const dates = week ? getWeekDates(week) : [];
+    const shiftInfo = {
+      earlyBefore:  '9:00 AM',
+      onTimeTill:   '9:15 AM',
+      lateAfter:    '9:15 AM',
+      weekOffDay,
+      weekOffLabel,
+    };
+
+    // Determine date range
+    let dates: string[] = [];
+    if (date)      dates = [date];
+    else if (week) dates = getWeekDatesFromStr(week);
 
     if (isManager) {
-      // Return all employees attendance
-      const users = await User.find({}, 'fullName email role');
-      const allAtt = dates.length > 0
-        ? await Attendance.find({ date: { $in: dates } })
-        : await Attendance.find({});
+      const userQuery: any = {};
+      if (teamId) userQuery.officeZoneId = teamId;
 
-      // Build heatmap per employee
+      const users = await User.find(userQuery, 'fullName email role officeZoneId isApproved')
+        .populate('officeZoneId', 'name')
+        .lean() as any[];
+
+      const employeeIds = users.map(u => u._id.toString());
+
+      // Heatmap attendance
+      const attQuery: any = { employeeId: { $in: employeeIds } };
+      if (dates.length > 0) attQuery.date = { $in: dates };
+      const allAtt = await Attendance.find(attQuery).lean() as any[];
+
       const heatmap = users.map((u: any) => {
-        const empAtt = allAtt.filter((a: any) => a.employeeId.toString() === u._id.toString());
+        const empAtt = allAtt.filter(a => a.employeeId.toString() === u._id.toString());
         const days: Record<string, string> = {};
-        for (const a of empAtt) {
-          days[a.date] = a.dayStatus;
-        }
+        for (const a of empAtt) days[a.date] = a.dayStatus;
         return {
-          employeeId: u._id.toString(),
+          employeeId:   u._id.toString(),
           employeeName: u.fullName,
-          role: u.role,
+          role:         u.role,
+          team:         (u.officeZoneId as any)?.name || 'No Zone',
+          isApproved:   u.isApproved,
           days,
         };
       });
 
-      // Today's log
-      const today = new Date();
-      const ist = new Date(today.getTime() + 5.5 * 60 * 60 * 1000);
-      const todayStr = ist.toISOString().split('T')[0];
-      const todayAtt = await Attendance.find({ date: todayStr });
+      // Selected date log
+      const logAtt = await Attendance.find({
+        employeeId: { $in: employeeIds },
+        date: logDate,
+      }).lean() as any[];
 
-      const todayLog = users.map((u: any) => {
-        const att = todayAtt.find((a: any) => a.employeeId.toString() === u._id.toString());
-        const lastSession = att?.sessions?.[att.sessions.length - 1];
-        return {
-          employeeId: u._id.toString(),
-          employeeName: u.fullName,
-          role: u.role,
-          checkInTime: lastSession?.checkIn
-            ? fmtTime(new Date(lastSession.checkIn))
-            : null,
-          isCheckedIn: att?.isCheckedIn || false,
-          dayStatus: att?.dayStatus || 'Absent',
-          totalWorkMins: att?.totalWorkMins || 0,
-        };
-      });
+      const todayLog = users
+        .map((u: any) => {
+          const att       = logAtt.find(a => a.employeeId.toString() === u._id.toString());
+          const firstSess = att?.sessions?.[0];
+          return {
+            employeeId:    u._id.toString(),
+            employeeName:  u.fullName,
+            role:          u.role,
+            team:          (u.officeZoneId as any)?.name || 'No Zone',
+            checkInTime:   firstSess?.checkIn ? fmtTime(new Date(firstSess.checkIn)) : null,
+            isCheckedIn:   att?.isCheckedIn || false,
+            dayStatus:     att?.dayStatus || 'Absent',
+            totalWorkMins: att?.totalWorkMins || 0,
+          };
+        })
+        .sort((a, b) => statusSortOrder(a.dayStatus) - statusSortOrder(b.dayStatus));
 
       const present = todayLog.filter((e: any) => e.dayStatus !== 'Absent').length;
 
-      return NextResponse.json({ heatmap, todayLog, total: users.length, present });
-    } else {
-      // Employee: own heatmap only
-      const empAtt = dates.length > 0
-        ? await Attendance.find({ employeeId: user.id, date: { $in: dates } })
-        : await Attendance.find({ employeeId: user.id });
+      return NextResponse.json({ heatmap, todayLog, total: users.length, present, shiftInfo });
 
+    } else {
+      // Employee — own data only
+      const attQuery: any = { employeeId: user.id };
+      if (dates.length > 0) attQuery.date = { $in: dates };
+
+      const empAtt = await Attendance.find(attQuery).lean() as any[];
       const days: Record<string, string> = {};
-      for (const a of empAtt) {
-        days[a.date] = a.dayStatus;
-      }
+      for (const a of empAtt) days[a.date] = a.dayStatus;
 
       return NextResponse.json({
         heatmap: [{ employeeId: user.id, employeeName: user.fullName, days }],
         todayLog: [],
-        total: 1,
-        present: 1,
+        total:    1,
+        present:  days[todayStr] && days[todayStr] !== 'Absent' ? 1 : 0,
+        shiftInfo,
       });
     }
   } catch (e: any) {

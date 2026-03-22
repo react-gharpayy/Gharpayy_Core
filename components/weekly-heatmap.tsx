@@ -2,19 +2,18 @@
 import { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 
-type DayStatus = 'Early' | 'On Time' | 'Late' | 'Absent' | 'none';
-
 interface HeatmapRow {
   employeeId: string;
   employeeName: string;
-  days: Record<string, DayStatus>;
+  days: Record<string, string>;
 }
 
-const STATUS_COLOR: Record<DayStatus, string> = {
+const STATUS_COLOR: Record<string, string> = {
   'Early':    'bg-teal-700',
   'On Time':  'bg-teal-500',
   'Late':     'bg-yellow-400',
   'Absent':   'bg-pink-300',
+  'Week Off': 'bg-gray-100 border border-dashed border-gray-300',
   'none':     'bg-gray-200',
 };
 
@@ -26,20 +25,28 @@ function getISTShiftedNow() {
 
 function getWeekDates() {
   const now = getISTShiftedNow();
-  const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  mon.setUTCDate(mon.getUTCDate() - ((now.getUTCDay() + 6) % 7));
-  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, i) => {
-    const d = new Date(mon);
-    d.setUTCDate(mon.getUTCDate() + i);
+  const dayOfWeek = now.getUTCDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setUTCDate(now.getUTCDate() + mondayOffset);
+
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => {
+    const d = new Date(monday);
+    d.setUTCDate(monday.getUTCDate() + i);
     return { label, date: d.toISOString().split('T')[0] };
   });
 }
 
 function getWeekStr() {
   const now = getISTShiftedNow();
-  const year = now.getUTCFullYear();
-  const start = new Date(Date.UTC(year, 0, 1));
-  const week = Math.ceil(((now.getTime() - start.getTime()) / 86400000 + start.getUTCDay() + 1) / 7);
+  const dayOfWeek = now.getUTCDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setUTCDate(now.getUTCDate() + mondayOffset);
+  const year = monday.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const dayOfYear = Math.floor((monday.getTime() - startOfYear.getTime()) / 86400000);
+  const week = Math.floor(dayOfYear / 7) + 1;
   return `${year}-${String(week).padStart(2, '0')}`;
 }
 
@@ -48,6 +55,7 @@ export default function WeeklyHeatmap() {
   const [present, setPresent] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [weekOffLabel, setWeekOffLabel] = useState<string>('Tue');
 
   const weekDays = getWeekDates();
   const today = getISTShiftedNow().toISOString().split('T')[0];
@@ -59,6 +67,7 @@ export default function WeeklyHeatmap() {
         if (d.heatmap) setHeatmap(d.heatmap);
         if (d.present !== undefined) setPresent(d.present);
         if (d.total !== undefined) setTotal(d.total);
+        if (d.shiftInfo?.weekOffLabel) setWeekOffLabel(d.shiftInfo.weekOffLabel);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -83,49 +92,75 @@ export default function WeeklyHeatmap() {
           {[1,2,3,4,5].map(i => (
             <div key={i} className="flex gap-2 items-center">
               <div className="w-20 h-4 bg-gray-200 rounded"/>
-              {[1,2,3,4,5,6].map(j => <div key={j} className="flex-1 h-10 bg-gray-100 rounded-lg"/>)}
+              {[1,2,3,4,5,6,7].map(j => <div key={j} className="flex-1 h-10 bg-gray-100 rounded-lg"/>)}
             </div>
           ))}
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <div className="flex gap-2 mb-4">
-            <div className="w-20 flex-shrink-0"/>
-            {weekDays.map(d => (
-              <div key={d.date} className={`flex-1 text-center text-xs md:text-sm font-medium ${d.date === today ? 'text-orange-500' : 'text-gray-500'}`}>
-                {d.label}
-              </div>
-            ))}
-          </div>
+          <div className="min-w-[620px]">
 
-          <div className="space-y-3">
-            {heatmap.length === 0 ? (
-              <p className="text-center text-gray-400 py-8 text-sm">No attendance data yet this week</p>
-            ) : heatmap.map(row => (
-              <div key={row.employeeId} className="flex gap-2 items-center">
-                <div className="w-20 flex-shrink-0 text-xs md:text-sm text-gray-600 truncate">
-                  {row.employeeName.split(' ').map((n, i) => i === 0 ? n : n[0] + '.').join(' ')}
+            {/* Day headers */}
+            <div className="flex gap-2 mb-4">
+              <div className="w-20 flex-shrink-0"/>
+              {weekDays.map(d => (
+                <div
+                  key={d.date}
+                  className={`flex-1 min-w-[48px] text-center text-xs md:text-sm font-medium ${
+                    d.date === today
+                      ? 'text-orange-500'
+                      : d.label === weekOffLabel
+                      ? 'text-gray-300'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  {d.label}
+                  {d.label === weekOffLabel && (
+                    <div className="text-[9px] text-gray-300 leading-none">off</div>
+                  )}
                 </div>
-                {weekDays.map(d => {
-                  const status: DayStatus = (row.days[d.date] as DayStatus) || 'none';
-                  return (
-                    <div
-                      key={d.date}
-                      title={status === 'none' ? '—' : status}
-                      className={`flex-1 h-10 md:h-12 rounded-lg ${STATUS_COLOR[status]} transition hover:opacity-80 ${d.date === today ? 'ring-2 ring-orange-400 ring-offset-1' : ''}`}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {/* Heatmap rows */}
+            <div className="space-y-3">
+              {heatmap.length === 0 ? (
+                <p className="text-center text-gray-400 py-8 text-sm">
+                  No attendance data yet this week
+                </p>
+              ) : heatmap.map(row => (
+                <div key={row.employeeId} className="flex gap-2 items-center">
+                  <div className="w-20 flex-shrink-0 text-xs md:text-sm text-gray-600 truncate">
+                    {row.employeeName.split(' ').map((n, i) => i === 0 ? n : n[0] + '.').join(' ')}
+                  </div>
+                  {weekDays.map(d => {
+                    const isWeekOff = d.label === weekOffLabel;
+                    const status: string = isWeekOff
+                      ? 'Week Off'
+                      : (row.days[d.date] as string) || 'none';
+                    return (
+                      <div
+                        key={d.date}
+                        title={isWeekOff ? 'Week Off' : status === 'none' ? '—' : status}
+                        className={`flex-1 min-w-[48px] h-10 md:h-12 rounded-lg ${STATUS_COLOR[status]} transition hover:opacity-80 ${
+                          d.date === today ? 'ring-2 ring-orange-400 ring-offset-1' : ''
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
           </div>
         </div>
       )}
 
+      {/* Legend */}
       <div className="flex flex-wrap gap-4 md:gap-6 mt-6 pt-4 border-t border-gray-200">
-        {(['Early', 'On Time', 'Late', 'Absent'] as DayStatus[]).map(s => (
+        {(['Early', 'On Time', 'Late', 'Absent', 'Week Off'] as string[]).map(s => (
           <div key={s} className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${STATUS_COLOR[s]}`}/>
+            <div className={`w-3 h-3 rounded-sm ${STATUS_COLOR[s]}`}/>
             <span className="text-xs md:text-sm text-gray-600">{s}</span>
           </div>
         ))}

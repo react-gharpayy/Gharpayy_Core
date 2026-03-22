@@ -8,10 +8,10 @@ import NoticesEmployee from '@/components/notices-employee';
 interface User { id: string; email: string; fullName: string; role: string; }
 
 const MOBILE_TABS = [
-  { label: 'Home', href: '/home', icon: Home },
-  { label: 'My Attendance', href: '/clock', icon: Clock },
-  { label: 'My Profile', href: '/profile', icon: User },
-  { label: 'Notices', href: '/notices', icon: Bell },
+  { label: 'Home',          href: '/home',    icon: Home  },
+  { label: 'My Attendance', href: '/clock',   icon: Clock },
+  { label: 'My Profile',    href: '/profile', icon: User  },
+  { label: 'Notices',       href: '/notices', icon: Bell  },
 ];
 
 function initials(name: string) {
@@ -38,6 +38,7 @@ export default function EmployeeHome({ user }: { user: User }) {
   const [loading, setLoading] = useState(true);
   const [clocking, setClocking] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   const fetchStatus = () => {
     setLoading(true);
@@ -48,7 +49,14 @@ export default function EmployeeHome({ user }: { user: User }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchStatus(); }, []);
+  useEffect(() => {
+    fetchStatus();
+    // Fetch profile photo from DB
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (d.profilePhoto) setProfilePhoto(d.profilePhoto); })
+      .catch(() => {});
+  }, []);
 
   const flash = (text: string, ok: boolean) => {
     setMsg({ text, ok });
@@ -56,11 +64,9 @@ export default function EmployeeHome({ user }: { user: User }) {
   };
 
   const doCheckIn = () => {
-    // Prevent double click
     if (clocking || att?.isCheckedIn) return;
     setClocking(true);
     flash('Getting your location...', true);
-
     if (!navigator.geolocation) {
       doCheckInCoords(null, null);
       return;
@@ -81,23 +87,18 @@ export default function EmployeeHome({ user }: { user: User }) {
       });
       const d = await r.json();
       if (d.ok) {
-        flash(`✅ Checked in successfully! You are ${d.dayStatus}.`, true);
+        flash(`✅ Checked in! You are ${d.dayStatus}.`, true);
         fetchStatus();
       } else {
-        if (d.error === 'Already checked in') {
-          flash('You are already checked in.', false);
-        } else {
-          flash(d.error || 'Check-in failed. Try again.', false);
-        }
+        flash(d.error === 'Already checked in' ? 'You are already checked in.' : d.error || 'Check-in failed.', false);
       }
     } catch {
-      flash('Network error. Check your internet and try again.', false);
+      flash('Network error. Try again.', false);
     }
     setClocking(false);
   };
 
   const doCheckOut = async () => {
-    // Prevent checkout if not checked in
     if (clocking || !att?.isCheckedIn) return;
     setClocking(true);
     try {
@@ -108,17 +109,13 @@ export default function EmployeeHome({ user }: { user: User }) {
       });
       const d = await r.json();
       if (d.ok) {
-        flash(`✅ Checked out! You worked ${fmtMins(d.totalWorkMins)} today.`, true);
+        flash(`✅ Checked out! Worked ${fmtMins(d.totalWorkMins)} today.`, true);
         fetchStatus();
       } else {
-        if (d.error === 'Not checked in') {
-          flash('You have not checked in yet today.', false);
-        } else {
-          flash(d.error || 'Check-out failed. Try again.', false);
-        }
+        flash(d.error || 'Check-out failed.', false);
       }
     } catch {
-      flash('Network error. Check your internet and try again.', false);
+      flash('Network error. Try again.', false);
     }
     setClocking(false);
   };
@@ -133,20 +130,11 @@ export default function EmployeeHome({ user }: { user: User }) {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata',
   });
 
-  // Determine clear status text
   const statusText = () => {
     if (loading) return null;
-    if (isIn) {
-      const time = att?.firstCheckIn ? fmtTime(att.firstCheckIn) : '--';
-      return { dot: 'bg-green-500', color: 'text-green-700', text: `● Checked In at ${time}` };
-    }
-    if (att?.sessions > 0) {
-      const time = att?.checkOutTime
-        ? fmtTime(att.checkOutTime)
-        : att?.firstCheckIn ? fmtTime(att.firstCheckIn) : '--';
-      return { dot: 'bg-gray-400', color: 'text-gray-600', text: `✓ Checked Out · Worked ${att.totalWorkFormatted}` };
-    }
-    return { dot: 'bg-red-400', color: 'text-gray-500', text: '● Not Checked In' };
+    if (isIn) return { color: 'text-green-700', text: `● Checked In at ${att?.firstCheckIn ? fmtTime(att.firstCheckIn) : '--'}` };
+    if (att?.sessions > 0) return { color: 'text-gray-600', text: `✓ Checked Out · Worked ${att.totalWorkFormatted}` };
+    return { color: 'text-gray-500', text: '● Not Checked In Yet' };
   };
 
   const status = statusText();
@@ -172,9 +160,8 @@ export default function EmployeeHome({ user }: { user: User }) {
               Logout
             </button>
             <button
-              onClick={() => setMobileMenuOpen((v) => !v)}
+              onClick={() => setMobileMenuOpen(v => !v)}
               className="md:hidden text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg p-2 transition"
-              aria-label="Toggle menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -184,15 +171,12 @@ export default function EmployeeHome({ user }: { user: User }) {
 
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200">
-          {MOBILE_TABS.map((tab) => {
+          {MOBILE_TABS.map(tab => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.href}
-                onClick={() => {
-                  router.push(tab.href);
-                  setMobileMenuOpen(false);
-                }}
+                onClick={() => { router.push(tab.href); setMobileMenuOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition text-left"
               >
                 <Icon className="w-5 h-5" />
@@ -217,17 +201,21 @@ export default function EmployeeHome({ user }: { user: User }) {
           <p className="text-gray-500 text-sm mt-0.5">{today}</p>
         </div>
 
-        {/* MAIN ATTENDANCE CARD */}
+        {/* ATTENDANCE CARD — quick status + clock in/out only */}
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
 
-          {/* Gradient banner */}
+          {/* Banner with avatar */}
           <div className="h-36 flex items-center justify-center relative overflow-hidden"
             style={{ background: 'linear-gradient(135deg, #1a1a6e 0%, #2d2d9f 50%, #6b6bdd 100%)' }}>
             <div className="absolute inset-0 opacity-5"
               style={{ backgroundImage: 'repeating-linear-gradient(45deg, white 0, white 1px, transparent 0, transparent 50%)', backgroundSize: '20px 20px' }}/>
             <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-white/20 border-2 border-white/30 flex items-center justify-center">
-                <span className="text-xl font-bold text-white">{initials(user.fullName)}</span>
+              <div className="w-16 h-16 rounded-full bg-white/20 border-2 border-white/30 flex items-center justify-center overflow-hidden">
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl font-bold text-white">{initials(user.fullName)}</span>
+                )}
               </div>
               <div className="text-center">
                 <div className="text-white font-semibold text-base">{user.fullName}</div>
@@ -238,7 +226,7 @@ export default function EmployeeHome({ user }: { user: User }) {
 
           <div className="p-5 space-y-4">
 
-            {/* ── CLEAR STATUS INDICATOR ── */}
+            {/* Status */}
             <div className={`rounded-2xl px-4 py-3 border ${
               loading ? 'bg-gray-50 border-gray-100' :
               isIn ? 'bg-green-50 border-green-200' :
@@ -248,19 +236,17 @@ export default function EmployeeHome({ user }: { user: User }) {
               {loading ? (
                 <div className="h-5 w-40 bg-gray-200 rounded animate-pulse"/>
               ) : (
-                <p className={`text-sm font-semibold ${status?.color}`}>
-                  {status?.text}
-                </p>
+                <p className={`text-sm font-semibold ${status?.color}`}>{status?.text}</p>
               )}
             </div>
 
-            {/* Stats — shown only after first check-in */}
+            {/* Quick stats — only if checked in today */}
             {!loading && att?.sessions > 0 && (
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: 'First In',  value: att.firstCheckIn ? fmtTime(att.firstCheckIn) : '--' },
-                  { label: 'Sessions',  value: String(att.sessions) },
-                  { label: 'Worked',    value: att.totalWorkFormatted },
+                  { label: 'First In', value: att.firstCheckIn ? fmtTime(att.firstCheckIn) : '--' },
+                  { label: 'Sessions', value: String(att.sessions) },
+                  { label: 'Worked',   value: att.totalWorkFormatted },
                 ].map(s => (
                   <div key={s.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
                     <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">{s.label}</div>
@@ -270,7 +256,7 @@ export default function EmployeeHome({ user }: { user: User }) {
               </div>
             )}
 
-            {/* ── CLOCK IN / OUT BUTTON ── */}
+            {/* Clock In / Out button */}
             {loading ? (
               <div className="h-14 bg-gray-100 rounded-2xl animate-pulse"/>
             ) : isIn ? (
@@ -312,19 +298,23 @@ export default function EmployeeHome({ user }: { user: User }) {
               <div className="flex items-center justify-center gap-1.5">
                 <MapPin className="w-3 h-3 text-gray-400"/>
                 <p className="text-xs text-gray-400 text-center">
-                  {isIn
-                    ? 'Tap Clock Out when you leave for the day'
-                    : 'Location will be captured automatically'}
+                  {isIn ? 'Tap Clock Out when you leave' : 'Location captured automatically'}
                 </p>
               </div>
             )}
 
-            {/* ── FLASH MESSAGE ── */}
+            {/* View full attendance link */}
+            <button
+              onClick={() => router.push('/clock')}
+              className="w-full py-2.5 rounded-2xl text-sm font-medium text-orange-500 border border-orange-200 hover:bg-orange-50 transition"
+            >
+              View Full Attendance Detail →
+            </button>
+
+            {/* Flash message */}
             {msg && (
               <div className={`flex items-start gap-2 p-3.5 rounded-2xl text-sm font-medium border ${
-                msg.ok
-                  ? 'bg-green-50 text-green-800 border-green-200'
-                  : 'bg-red-50 text-red-700 border-red-200'
+                msg.ok ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
               }`}>
                 {msg.ok
                   ? <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-green-600"/>
@@ -335,30 +325,7 @@ export default function EmployeeHome({ user }: { user: User }) {
           </div>
         </div>
 
-        {/* TODAY'S TIMELINE */}
-        {!loading && att?.timeline && att.timeline.length > 0 && (
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-4 h-4 text-orange-500"/>
-              <h3 className="font-bold text-gray-800 text-sm">Today's Timeline</h3>
-            </div>
-            <div className="space-y-2">
-              {att.timeline.map((ev: any, i: number) => (
-                <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${
-                  ev.type === 'checkin' ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
-                }`}>
-                  {ev.type === 'checkin'
-                    ? <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0"/>
-                    : <XCircle className="w-4 h-4 text-gray-400 flex-shrink-0"/>}
-                  <span className="text-sm text-gray-700 flex-1">{ev.label}</span>
-                  <span className="text-xs text-gray-400 font-medium">{ev.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* NOTICES */}
+        {/* Notices */}
         <NoticesEmployee />
 
       </div>

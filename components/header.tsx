@@ -11,7 +11,7 @@ export default function Header() {
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { if (d.user) setUser(d.user); })
+      .then(d => { if (d.id || d.email) setUser(d); })
       .catch(() => {});
   }, []);
 
