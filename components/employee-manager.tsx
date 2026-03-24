@@ -210,7 +210,7 @@ export default function EmployeeManager() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-800">Employee Management</h2>
-              <p className="text-xs text-gray-500 mt-0.5">{employees.length} accounts · Admin only</p>
+              <p className="text-xs text-gray-700 mt-0.5">{employees.length} accounts · Admin only</p>
             </div>
           </div>
           <button onClick={fetchEmployees} className="p-2 rounded-xl hover:bg-gray-100 transition">
@@ -288,7 +288,7 @@ export default function EmployeeManager() {
                     </div>
                     <div>
                       <p className="font-semibold text-gray-800 text-sm">{emp.fullName}</p>
-                      <p className="text-xs text-gray-500">{emp.email}</p>
+                      <p className="text-xs text-gray-700">{emp.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -325,7 +325,7 @@ export default function EmployeeManager() {
               <h3 className="text-lg font-bold text-gray-800">Add Employee</h3>
               <button onClick={() => setShowManual(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100">
-                <X className="w-4 h-4 text-gray-500" />
+                <X className="w-4 h-4 text-gray-700" />
               </button>
             </div>
 
@@ -382,12 +382,12 @@ export default function EmployeeManager() {
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <div>
                 <h3 className="text-lg font-bold text-gray-800">CSV Preview</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{csvRows.length} employees found</p>
+                <p className="text-xs text-gray-700 mt-0.5">{csvRows.length} employees found</p>
               </div>
               {!importing && (
                 <button onClick={() => setShowCSV(false)}
                   className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100">
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4 text-gray-700" />
                 </button>
               )}
             </div>
@@ -401,7 +401,7 @@ export default function EmployeeManager() {
                 }`}>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{row.fullName}</p>
-                    <p className="text-xs text-gray-500">{row.email} · {row.role}</p>
+                    <p className="text-xs text-gray-700">{row.email} · {row.role}</p>
                     {row.error && <p className="text-xs text-red-500 mt-0.5">{row.error}</p>}
                   </div>
                   <div className="flex-shrink-0">

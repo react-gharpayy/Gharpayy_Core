@@ -95,7 +95,7 @@ export default function EmployeeNav({
                 className={`px-4 py-3 font-medium text-sm whitespace-nowrap transition border-b-2 ${
                   isActive(tab.href)
                     ? 'text-orange-500 border-orange-500'
-                    : 'text-gray-500 border-transparent hover:text-gray-800'
+                    : 'text-gray-700 border-transparent hover:text-gray-800'
                 }`}
               >
                 {tab.label}

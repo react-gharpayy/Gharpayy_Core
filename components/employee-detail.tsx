@@ -90,7 +90,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
           <Clock className="w-6 h-6 text-orange-500" />
           <h2 className="text-xl md:text-2xl font-bold text-gray-800">Attendance</h2>
         </div>
-        <span className="text-gray-500 text-sm">Today's Detail</span>
+        <span className="text-gray-700 text-sm">Today's Detail</span>
       </div>
 
       <div className="bg-orange-50 rounded-2xl p-6 md:p-8 border border-orange-200">
@@ -117,15 +117,15 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
               <div className="grid grid-cols-3 gap-3 mb-5 text-center">
                 <div className="bg-white rounded-xl p-3 border border-orange-100">
                   <div className="text-lg font-bold text-gray-800">{att.sessions}</div>
-                  <div className="text-xs text-gray-500">Sessions</div>
+                  <div className="text-xs text-gray-700">Sessions</div>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-orange-100">
                   <div className="text-lg font-bold text-teal-600">{att.totalWorkFormatted}</div>
-                  <div className="text-xs text-gray-500">Worked</div>
+                  <div className="text-xs text-gray-700">Worked</div>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-orange-100">
                   <div className={`text-sm font-bold ${att.dayStatus === 'Late' ? 'text-orange-500' : 'text-teal-600'}`}>{att.dayStatus}</div>
-                  <div className="text-xs text-gray-500">Status</div>
+                  <div className="text-xs text-gray-700">Status</div>
                 </div>
               </div>
             )}

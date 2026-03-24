@@ -2,20 +2,20 @@
 import { useEffect, useState } from 'react';
 import { Clock, MapPin, Navigation, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
-// ── Koramangala office coordinates ──────────────────────────────────────────
+// Koramangala office coordinates
 const OFFICE_LAT = 12.93482;
 const OFFICE_LNG = 77.61124;
 const OFFICE_NAME = 'Koramangala Office, Bangalore';
 const GEO_RADIUS_M = 100; // 100 metre radius
 
-// ── Haversine distance (metres) ─────────────────────────────────────────────
+// Haversine distance (metres)
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  const phi1 = lat1 * Math.PI / 180;
+  const phi2 = lat2 * Math.PI / 180;
+  const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+  const deltaLambda = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(deltaPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -98,14 +98,14 @@ export default function GeoFenceVerification() {
           <Clock className="w-6 h-6 text-orange-500" />
           <h2 className="text-xl md:text-2xl font-bold text-gray-800">Attendance</h2>
         </div>
-        <span className="text-gray-500 text-sm md:text-base">
-          Today · <strong className="text-gray-800">{present}/{total} present</strong>
+        <span className="text-gray-700 text-sm md:text-base">
+          Today - <strong className="text-gray-800">{present}/{total} present</strong>
         </span>
       </div>
 
       <h3 className="text-gray-600 text-sm md:text-base font-medium mb-6">Geo-Fence Verification</h3>
 
-      {/* Map visual — realistic grid map with concentric circles */}
+      {/* Map visual with concentric circles */}
       <div className="rounded-2xl overflow-hidden border border-blue-200 mb-6">
         {/* Map grid background */}
         <div className="relative h-52 flex items-center justify-center"
@@ -137,7 +137,7 @@ export default function GeoFenceVerification() {
           {/* 200m ring */}
           <div className="absolute w-36 h-36 rounded-full border border-dashed border-orange-400 opacity-40"/>
 
-          {/* Geo-fence circle — 100m */}
+          {/* Geo-fence circle - 100m */}
           <div className="absolute w-24 h-24 rounded-full border-2 border-orange-500 opacity-70"
             style={{ background: 'rgba(251,146,60,0.1)' }}/>
 
@@ -146,9 +146,9 @@ export default function GeoFenceVerification() {
             <div className="w-10 h-10 rounded-full bg-orange-500 border-3 border-white shadow-lg flex items-center justify-center">
               <MapPin className="w-5 h-5 text-white" fill="currentColor"/>
             </div>
-            <div className="mt-2 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1 shadow-sm">
+            <div className="mt-2 bg-white rounded-lg px-3 py-1 shadow-sm">
               <p className="text-xs font-semibold text-gray-800">Koramangala Office</p>
-              <p className="text-[10px] text-gray-500 text-center">100m radius</p>
+              <p className="text-[10px] text-gray-700 text-center">100m radius</p>
             </div>
           </div>
 
@@ -172,7 +172,7 @@ export default function GeoFenceVerification() {
 
           {/* Labels */}
           <div className="absolute bottom-2 right-3 text-[9px] text-blue-600/60 font-medium">
-            12.9348°N, 77.6112°E
+            12.9348N, 77.6112E
           </div>
         </div>
 
@@ -222,10 +222,10 @@ export default function GeoFenceVerification() {
             : <XCircle className="w-5 h-5 text-red-400 flex-shrink-0"/>}
           <div>
             <p className={`text-sm font-semibold ${myLocation.dist <= GEO_RADIUS_M ? 'text-green-700' : 'text-red-700'}`}>
-              {myLocation.dist <= GEO_RADIUS_M ? 'You are inside the geo-fence ✓' : 'You are outside the geo-fence'}
+              {myLocation.dist <= GEO_RADIUS_M ? 'You are inside the geo-fence' : 'You are outside the geo-fence'}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {fmtDistance(myLocation.dist)} from office · {myLocation.lat.toFixed(5)}°N, {myLocation.lng.toFixed(5)}°E
+            <p className="text-xs text-gray-700 mt-0.5">
+              {fmtDistance(myLocation.dist)} from office - {myLocation.lat.toFixed(5)}N, {myLocation.lng.toFixed(5)}E
             </p>
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function GeoFenceVerification() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-800">{emp.employeeName}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-700">
                       {hasGps
                         ? emp.distance !== null ? fmtDistance(emp.distance) : 'GPS captured'
                         : 'No GPS data'}
@@ -289,11 +289,12 @@ export default function GeoFenceVerification() {
       {/* Office info footer */}
       <div className="mt-5 pt-4 border-t border-gray-100 flex items-center gap-2">
         <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0"/>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-700">
           <span className="font-medium text-gray-700">{OFFICE_NAME}</span>
-          {' '}· Geo-fence radius: {GEO_RADIUS_M}m · {inside}/{employees.filter(e => e.checkInTime).length} verified
+          {' '} - Geo-fence radius: {GEO_RADIUS_M}m - {inside}/{employees.filter(e => e.checkInTime).length} verified
         </p>
       </div>
     </div>
   );
 }
+

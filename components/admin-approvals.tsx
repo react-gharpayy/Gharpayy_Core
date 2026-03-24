@@ -125,7 +125,7 @@ export default function AdminApprovals() {
           className={`px-4 py-3 font-medium text-sm border-b-2 transition ${
             activeTab === 'pending'
               ? 'text-orange-500 border-orange-500'
-              : 'text-gray-500 border-transparent hover:text-gray-700'
+              : 'text-gray-700 border-transparent hover:text-gray-700'
           }`}>
           Pending Approval
         </button>
@@ -133,7 +133,7 @@ export default function AdminApprovals() {
           className={`px-4 py-3 font-medium text-sm border-b-2 transition ${
             activeTab === 'approved'
               ? 'text-orange-500 border-orange-500'
-              : 'text-gray-500 border-transparent hover:text-gray-700'
+              : 'text-gray-700 border-transparent hover:text-gray-700'
           }`}>
           Approved Employees
         </button>
@@ -151,7 +151,7 @@ export default function AdminApprovals() {
           <Loader className="w-6 h-6 text-orange-500 animate-spin" />
         </div>
       ) : employees.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-gray-700">
           <p>No {activeTab} employees</p>
         </div>
       ) : (
@@ -169,7 +169,7 @@ export default function AdminApprovals() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="font-semibold text-gray-800 text-sm">{emp.fullName}</h3>
-                      <p className="text-xs text-gray-500">{emp.email}</p>
+                      <p className="text-xs text-gray-700">{emp.email}</p>
                     </div>
                     {emp.isApproved && (
                       <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">Approved</span>
@@ -178,11 +178,11 @@ export default function AdminApprovals() {
 
                   <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                     <div>
-                      <p className="text-gray-500">DOB</p>
+                      <p className="text-gray-700">DOB</p>
                       <p className="font-medium text-gray-700">{emp.dateOfBirth}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500">Role</p>
+                      <p className="text-gray-700">Role</p>
                       {editingId === emp._id ? (
                         <select value={editData.jobRole} onChange={e => setEditData({ ...editData, jobRole: e.target.value })} className="text-xs border border-gray-200 rounded px-2 py-1">
                           <option value="">Select</option>
@@ -194,7 +194,7 @@ export default function AdminApprovals() {
                       )}
                     </div>
                     <div>
-                      <p className="text-gray-500">Zone</p>
+                      <p className="text-gray-700">Zone</p>
                       {editingId === emp._id ? (
                         <select value={editData.officeZoneId} onChange={e => setEditData({ ...editData, officeZoneId: e.target.value })} className="text-xs border border-gray-200 rounded px-2 py-1">
                           <option value="">Select</option>
@@ -205,7 +205,7 @@ export default function AdminApprovals() {
                       )}
                     </div>
                     <div>
-                      <p className="text-gray-500">Applied</p>
+                      <p className="text-gray-700">Applied</p>
                       {/* FIXED: was new Date().toLocaleDateString() with no timezone */}
                       <p className="font-medium text-gray-700">{fmtDate(emp.createdAt)}</p>
                     </div>

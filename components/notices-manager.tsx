@@ -120,7 +120,7 @@ export default function NoticesManager() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-800">Notices & Warnings</h2>
-            <p className="text-xs text-gray-500 mt-0.5">{notices.length} total · {warningCount + urgentCount} alerts</p>
+            <p className="text-xs text-gray-700 mt-0.5">{notices.length} total · {warningCount + urgentCount} alerts</p>
           </div>
         </div>
         <button
@@ -141,7 +141,7 @@ export default function NoticesManager() {
         ].map(s => (
           <div key={s.label} className={`${s.bg} border ${s.border} rounded-2xl p-3 text-center`}>
             <div className={`text-2xl font-bold ${s.text}`}>{s.count}</div>
-            <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+            <div className="text-xs text-gray-700 mt-0.5">{s.label}</div>
           </div>
         ))}
       </div>
@@ -156,7 +156,7 @@ export default function NoticesManager() {
               <h3 className="text-lg font-bold text-gray-800">Create Notice</h3>
               <button onClick={() => setShowForm(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">
-                <X className="w-4 h-4 text-gray-500" />
+                <X className="w-4 h-4 text-gray-700" />
               </button>
             </div>
 

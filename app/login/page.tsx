@@ -56,7 +56,7 @@ export default function LoginPage() {
         </div>
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
           <h2 className="text-xl font-bold text-gray-800 mb-1">Welcome back 👋</h2>
-          <p className="text-sm text-gray-500 mb-6">Sign in to mark your attendance</p>
+          <p className="text-sm text-gray-700 mb-6">Sign in to mark your attendance</p>
           {error && (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3.5 mb-5">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -98,7 +98,7 @@ export default function LoginPage() {
           </form>
         </div>
         <p className="text-center text-xs text-gray-400 mt-6">Gharpayy Attendance · {new Date().getFullYear()}</p>
-        <p className="text-center text-xs text-gray-500 mt-3">New to Gharpayy? <a href="/signup" className="text-orange-500 hover:underline font-semibold">Sign up here</a></p>
+        <p className="text-center text-xs text-gray-700 mt-3">New to Gharpayy? <a href="/signup" className="text-orange-500 hover:underline font-semibold">Sign up here</a></p>
       </div>
     </div>
   );

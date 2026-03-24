@@ -57,7 +57,7 @@ export default function CoverageSummary() {
           <Clock className="w-6 h-6 text-orange-500" />
           <h2 className="text-xl md:text-2xl font-bold text-gray-800">Attendance</h2>
         </div>
-        <span className="text-gray-500 text-sm md:text-base">Today · <strong className="text-gray-800">{present}/{total} present</strong></span>
+        <span className="text-gray-700 text-sm md:text-base">Today · <strong className="text-gray-800">{present}/{total} present</strong></span>
       </div>
 
       <h3 className="text-gray-600 text-sm md:text-base font-medium mb-6">Coverage Summary</h3>

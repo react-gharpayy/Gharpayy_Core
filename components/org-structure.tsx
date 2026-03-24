@@ -156,7 +156,7 @@ export default function OrgStructure() {
                 <Check className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => setEditing(null)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition">
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-50 text-gray-700 hover:bg-gray-100 transition">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -167,7 +167,7 @@ export default function OrgStructure() {
           <div className="mt-3 space-y-2 pt-3 border-t border-gray-100">
             {availableManagers.length > 0 && (
               <div>
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Reports To</label>
+                <label className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide mb-1 block">Reports To</label>
                 <select value={editData.managerId}
                   onChange={e => setEditData(p => ({ ...p, managerId: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-orange-400">
@@ -180,14 +180,14 @@ export default function OrgStructure() {
             )}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Team Name</label>
+                <label className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide mb-1 block">Team Name</label>
                 <input value={editData.teamName}
                   onChange={e => setEditData(p => ({ ...p, teamName: e.target.value }))}
                   placeholder="e.g. Tech Team"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Department</label>
+                <label className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide mb-1 block">Department</label>
                 <input value={editData.department}
                   onChange={e => setEditData(p => ({ ...p, department: e.target.value }))}
                   placeholder="e.g. Engineering"
@@ -211,7 +211,7 @@ export default function OrgStructure() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-800">Org Structure</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-700 mt-0.5">
               {groupedByZone
                 ? 'Employees grouped by zone · Assign team names and departments below'
                 : 'Employees grouped by manager'}

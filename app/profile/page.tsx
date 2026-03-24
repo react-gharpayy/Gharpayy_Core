@@ -152,7 +152,7 @@ export default function ProfilePage() {
             </div>
 
             <h2 className="text-xl font-bold text-gray-800">{profile?.fullName || 'N/A'}</h2>
-            <p className="text-sm text-gray-500 capitalize">{profile?.role || 'Employee'}</p>
+            <p className="text-sm text-gray-700 capitalize">{profile?.role || 'Employee'}</p>
           </div>
         </div>
 

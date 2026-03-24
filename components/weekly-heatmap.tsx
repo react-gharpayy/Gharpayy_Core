@@ -80,7 +80,7 @@ export default function WeeklyHeatmap() {
           <Clock className="w-6 h-6 text-orange-500" />
           <h2 className="text-xl md:text-2xl font-bold text-gray-800">Attendance</h2>
         </div>
-        <span className="text-gray-500 text-sm md:text-base">
+        <span className="text-gray-700 text-sm md:text-base">
           Today · <strong className="text-gray-800">{present}/{total} present</strong>
         </span>
       </div>
@@ -111,7 +111,7 @@ export default function WeeklyHeatmap() {
                       ? 'text-orange-500'
                       : d.label === weekOffLabel
                       ? 'text-gray-300'
-                      : 'text-gray-500'
+                      : 'text-gray-700'
                   }`}
                 >
                   {d.label}

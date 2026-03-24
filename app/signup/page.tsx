@@ -160,7 +160,7 @@ export default function SignupPage() {
           {step === 1 && (
             <>
               <h2 className="text-xl font-bold text-gray-800 mb-1">Create your account</h2>
-              <p className="text-sm text-gray-500 mb-6">Step 1 of 3: Basic Information</p>
+              <p className="text-sm text-gray-700 mb-6">Step 1 of 3: Basic Information</p>
 
               {error && (
                 <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3.5 mb-5">
@@ -220,7 +220,7 @@ export default function SignupPage() {
           {step === 2 && (
             <>
               <h2 className="text-xl font-bold text-gray-800 mb-1">Your Details</h2>
-              <p className="text-sm text-gray-500 mb-6">Step 2 of 3: Personal Information</p>
+              <p className="text-sm text-gray-700 mb-6">Step 2 of 3: Personal Information</p>
 
               {error && (
                 <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3.5 mb-5">
@@ -268,7 +268,7 @@ export default function SignupPage() {
           {step === 3 && (
             <>
               <h2 className="text-xl font-bold text-gray-800 mb-1">Office & Profile</h2>
-              <p className="text-sm text-gray-500 mb-6">Step 3 of 3: Final Details</p>
+              <p className="text-sm text-gray-700 mb-6">Step 3 of 3: Final Details</p>
 
               {error && (
                 <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3.5 mb-5">
@@ -288,7 +288,7 @@ export default function SignupPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Office Zone *</label>
                   {zoneLoading ? (
-                    <div className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-100 text-gray-500">
+                    <div className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-100 text-gray-700">
                       Loading zones...
                     </div>
                   ) : zones.length === 0 ? (

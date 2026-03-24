@@ -134,7 +134,7 @@ export default function EmployeeHome({ user }: { user: User }) {
     if (loading) return null;
     if (isIn) return { color: 'text-green-700', text: `● Checked In at ${att?.firstCheckIn ? fmtTime(att.firstCheckIn) : '--'}` };
     if (att?.sessions > 0) return { color: 'text-gray-600', text: `✓ Checked Out · Worked ${att.totalWorkFormatted}` };
-    return { color: 'text-gray-500', text: '● Not Checked In Yet' };
+    return { color: 'text-gray-700', text: '● Not Checked In Yet' };
   };
 
   const status = statusText();
@@ -154,7 +154,7 @@ export default function EmployeeHome({ user }: { user: User }) {
           <div className="flex items-center gap-2">
             <button
               onClick={logout}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-500 border border-gray-200 rounded-lg px-3 py-1.5 transition"
+              className="flex items-center gap-1.5 text-sm text-gray-700 hover:text-orange-500 border border-gray-200 rounded-lg px-3 py-1.5 transition"
             >
               <LogOut className="w-3.5 h-3.5" />
               Logout
@@ -198,7 +198,7 @@ export default function EmployeeHome({ user }: { user: User }) {
           <h1 className="text-2xl font-bold text-gray-800">
             Hi, {user.fullName.split(' ')[0]} 👋
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">{today}</p>
+          <p className="text-gray-700 text-sm mt-0.5">{today}</p>
         </div>
 
         {/* ATTENDANCE CARD — quick status + clock in/out only */}

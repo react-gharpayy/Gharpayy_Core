@@ -42,7 +42,7 @@ export default function Header() {
           </button>
         )}
         <button onClick={logout}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-500 transition border border-gray-200 rounded-lg px-3 py-1.5">
+          className="flex items-center gap-1.5 text-sm text-gray-700 hover:text-orange-500 transition border border-gray-200 rounded-lg px-3 py-1.5">
           <LogOut className="w-4 h-4" />
           Logout
         </button>

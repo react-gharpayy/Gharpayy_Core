@@ -44,7 +44,7 @@ function statusStyle(status: string) {
   if (status === 'Early')   return 'bg-teal-100 text-teal-700';
   if (status === 'On Time') return 'bg-green-100 text-green-700';
   if (status === 'Late')    return 'bg-yellow-100 text-yellow-700';
-  return 'bg-gray-100 text-gray-500';
+  return 'bg-gray-100 text-gray-700';
 }
 function fmtISTTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', {
@@ -175,7 +175,7 @@ export default function TodaysLog() {
             <Clock className="w-6 h-6 text-orange-500" />
             <h2 className="text-xl md:text-2xl font-bold text-gray-800">Attendance</h2>
           </div>
-          <span className="text-gray-500 text-sm md:text-base">
+          <span className="text-gray-700 text-sm md:text-base">
             {rangeMode ? `${rangeStart} → ${rangeEnd}` : isToday ? 'Today' : selectedDate}
             &nbsp;·&nbsp;<strong className="text-gray-800">{present}/{total} present</strong>
           </span>
@@ -200,7 +200,7 @@ export default function TodaysLog() {
           </button>
           {(!isToday || activeFilters > 0) && (
             <button onClick={resetFilters}
-              className="px-3 py-2.5 rounded-2xl border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 transition whitespace-nowrap">
+              className="px-3 py-2.5 rounded-2xl border border-gray-200 text-xs text-gray-700 hover:bg-gray-50 transition whitespace-nowrap">
               Reset
             </button>
           )}
@@ -211,7 +211,7 @@ export default function TodaysLog() {
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-3 space-y-3">
             {/* Zone filter */}
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Zone / Team</label>
+              <label className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide mb-2 block">Zone / Team</label>
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => handleTeamChange('')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
@@ -228,7 +228,7 @@ export default function TodaysLog() {
 
             {/* Status filter */}
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Status</label>
+              <label className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide mb-2 block">Status</label>
               <div className="flex flex-wrap gap-2">
                 {['', 'Early', 'On Time', 'Late', 'Absent'].map(s => (
                   <button key={s} onClick={() => setSelectedStatus(s)}
@@ -241,7 +241,7 @@ export default function TodaysLog() {
 
             {/* Date range */}
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Date Range</label>
+              <label className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide mb-2 block">Date Range</label>
               <div className="flex gap-2 items-center">
                 <input type="date" value={rangeStart} max={getTodayIST()}
                   onChange={e => setRangeStart(e.target.value)}
@@ -334,12 +334,12 @@ export default function TodaysLog() {
                     </div>
                     <div>
                       <p className="font-bold text-gray-800">{drill.employee.fullName}</p>
-                      <p className="text-xs text-gray-500 capitalize">{drill.employee.role} · {drill.employee.email}</p>
+                      <p className="text-xs text-gray-700 capitalize">{drill.employee.role} · {drill.employee.email}</p>
                     </div>
                   </div>
                   <button onClick={() => setDrill(null)}
                     className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">
-                    <X className="w-4 h-4 text-gray-500"/>
+                    <X className="w-4 h-4 text-gray-700"/>
                   </button>
                 </div>
 
@@ -356,7 +356,7 @@ export default function TodaysLog() {
                         drill.attendance.isCheckedIn ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
                       }`}>
                         <div>
-                          <p className="text-xs text-gray-500 mb-0.5">Status</p>
+                          <p className="text-xs text-gray-700 mb-0.5">Status</p>
                           <p className={`font-bold text-sm ${drill.attendance.isCheckedIn ? 'text-green-700' : 'text-gray-700'}`}>
                             {drill.attendance.isCheckedIn ? '● Active Right Now' : '✓ Checked Out'}
                           </p>
@@ -382,7 +382,7 @@ export default function TodaysLog() {
 
                       {drill.attendance.timeline.length > 0 && (
                         <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Timeline</p>
+                          <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">Timeline</p>
                           <div className="space-y-2">
                             {drill.attendance.timeline.map((ev, i) => (
                               <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${
