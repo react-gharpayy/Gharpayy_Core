@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
+import { rateLimit } from '@/lib/rate-limit';
+import { BCRYPT_SALT_ROUNDS, PHOTO_MAX_SIZE_BYTES } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    if (!rateLimit(ip)) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
     const { fullName, email, password, dateOfBirth, jobRole, profilePhoto, officeZoneId, workStartTime, workEndTime, breakDuration } = await req.json();
 
     // Validation
@@ -19,6 +26,11 @@ export async function POST(req: NextRequest) {
     const breakMins = Number(breakDuration);
     if (!Number.isFinite(breakMins) || breakMins < 0 || breakMins > 240) return NextResponse.json({ error: 'Valid break duration required' }, { status: 400 });
 
+    // Check photo size
+    if (profilePhoto && typeof profilePhoto === 'string' && profilePhoto.length > PHOTO_MAX_SIZE_BYTES) {
+      return NextResponse.json({ error: 'Profile photo too large. Maximum 2MB.' }, { status: 400 });
+    }
+
     await connectDB();
 
     // Check if email already exists
@@ -26,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (existing) return NextResponse.json({ error: 'Email already registered' }, { status: 400 });
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     // Create user (not approved by default)
     const user = await User.create({
@@ -53,7 +65,8 @@ export async function POST(req: NextRequest) {
       message: 'Signup successful! Please wait for admin approval.',
       userId: user._id.toString(),
     }, { status: 201 });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

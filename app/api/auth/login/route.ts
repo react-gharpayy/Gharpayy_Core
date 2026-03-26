@@ -3,11 +3,19 @@ import bcrypt from 'bcryptjs';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
 import { signToken, COOKIE_NAME, COOKIE_OPTIONS } from '@/lib/auth';
+import { rateLimit } from '@/lib/rate-limit';
+import { loginSchema } from '@/lib/validations';
+import { ZodError } from 'zod';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    if (!rateLimit(ip)) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
+    const body = await req.json();
+    const { email, password } = loginSchema.parse(body);
 
     await connectDB();
 
@@ -34,7 +42,11 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ ok: true, user: { id: user._id.toString(), email: user.email, fullName: user.fullName, role: user.role } });
     res.cookies.set(COOKIE_NAME, token, COOKIE_OPTIONS);
     return res;
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    if (e instanceof ZodError) {
+      return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
+    }
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

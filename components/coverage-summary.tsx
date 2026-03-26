@@ -41,9 +41,9 @@ export default function CoverageSummary() {
 
   const parsedTimes = employees
     .map((e: any) => (e.checkInTime ? parseIST12h(e.checkInTime) : null))
-    .filter((t): t is number => t !== null);
+    .filter((t: number | null): t is number => t !== null);
   const avgMinutes = parsedTimes.length
-    ? Math.round(parsedTimes.reduce((sum, t) => sum + t, 0) / parsedTimes.length)
+    ? Math.round(parsedTimes.reduce((sum: number, t: number) => sum + t, 0) / parsedTimes.length)
     : null;
   const avgStr = avgMinutes !== null ? formatIST12h(avgMinutes) : '--';
 

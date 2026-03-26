@@ -23,4 +23,6 @@ const NoticeSchema = new Schema<INotice>({
   readBy:        { type: [String], default: [] },
 }, { timestamps: true });
 
+NoticeSchema.index({ targetId: 1, createdAt: -1 });
+
 export default mongoose.models.GpNotice || mongoose.model<INotice>('GpNotice', NoticeSchema);

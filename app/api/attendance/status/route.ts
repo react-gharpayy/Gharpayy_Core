@@ -3,10 +3,11 @@ import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
-import { autoCloseMissedClockOut, deriveStatusFromAttendance, getISTDateStr, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
+import { deriveStatusFromAttendance, getISTDateStr, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
+import { IST_OFFSET_MS } from '@/lib/constants';
 
 function fmtTime(d: Date) {
-  return new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+  return new Date(d.getTime() + IST_OFFSET_MS)
     .toISOString()
     .split('T')[1]
     .substring(0, 5)
@@ -26,7 +27,7 @@ function fmtMins(m: number) {
 }
 
 function getISTDateDaysAgo(days: number) {
-  const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const now = new Date(Date.now() + IST_OFFSET_MS);
   now.setUTCDate(now.getUTCDate() - days);
   return now.toISOString().split('T')[0];
 }
@@ -37,10 +38,10 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     await connectDB();
-    await autoCloseMissedClockOut(user.id);
     const date = getISTDateStr();
     const tomorrow = getISTDateDaysAgo(-1);
     const att = await Attendance.findOne({ employeeId: user.id, date });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dbUser = await User.findById(user.id).select('workSchedule leaves').lean() as any;
     const rules = await getShiftRules();
 
@@ -63,7 +64,9 @@ export async function GET() {
         shiftRules: rules,
         timeline: [],
         workSchedule: dbUser?.workSchedule || null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isOffToday: Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === date && l.type === 'day_off') : false,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isOffTomorrow: Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === tomorrow && l.type === 'day_off') : false,
         session: {
           status: 'offline',
@@ -75,7 +78,9 @@ export async function GET() {
     }
 
     const lastSession = att.sessions[att.sessions.length - 1];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const firstWorkSession = att.sessions.find((s: any) => (s.type || 'work') !== 'break');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lastClosedSession = [...att.sessions].reverse().find((s: any) => !!s.checkOut);
     recomputeAttendanceTotals(att);
     const derived = deriveStatusFromAttendance(att, rules);
@@ -99,17 +104,25 @@ export async function GET() {
       }
     }
     const weekStart = getISTDateDaysAgo(6);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const weekRows = await Attendance.find({
       employeeId: user.id,
       date: { $gte: weekStart, $lte: date },
     }).lean() as any[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const weekPresent = weekRows.filter((r: any) => (r.dayStatus || 'Absent') !== 'Absent').length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const weekLate = weekRows.filter((r: any) => r.dayStatus === 'Late').length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const weekEarly = weekRows.filter((r: any) => r.dayStatus === 'Early').length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const weekHours = weekRows.reduce((sum: number, r: any) => sum + Number(r.totalWorkMins || 0), 0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lastBreak = [...att.sessions].reverse().find((s: any) => s.type === 'break');
     const sessionStatus = att.isOnBreak ? 'break' : att.isCheckedIn ? 'active' : 'offline';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isOffToday = Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === date && l.type === 'day_off') : false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isOffTomorrow = Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === tomorrow && l.type === 'day_off') : false;
 
     return NextResponse.json({
@@ -149,7 +162,8 @@ export async function GET() {
         totalWorkFormatted: fmtMins(weekHours),
       },
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,11 +1,12 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
-import '@/models/OfficeZone'; // † required so mongoose knows the schema for populate
+import '@/models/OfficeZone'; // required so mongoose knows the schema for populate
 import { getAuthUser } from '@/lib/auth';
 import mongoose from 'mongoose';
+import { PHOTO_MAX_SIZE_BYTES } from '@/lib/constants';
 
-// GET €” return current user with full DB data
+// GET - return current user with full DB data
 export async function GET() {
   try {
     const user = await getAuthUser();
@@ -33,6 +34,7 @@ export async function GET() {
 
     await connectDB();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dbUser = await User.findById(user.id)
       .populate('officeZoneId', 'name')
       .select('-password')
@@ -41,12 +43,13 @@ export async function GET() {
     if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     return NextResponse.json({ ...dbUser, id: dbUser._id?.toString() });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// PATCH €” update profile photo
+// PATCH - update profile photo
 export async function PATCH(req: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -67,12 +70,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid image format' }, { status: 400 });
     }
 
+    // Check photo size
+    if (typeof profilePhoto === 'string' && profilePhoto.length > PHOTO_MAX_SIZE_BYTES) {
+      return NextResponse.json({ error: 'Profile photo too large. Maximum 2MB.' }, { status: 400 });
+    }
+
     await connectDB();
 
     await User.findByIdAndUpdate(user.id, { profilePhoto });
 
     return NextResponse.json({ ok: true, message: 'Photo updated successfully' });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

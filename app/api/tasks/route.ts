@@ -4,13 +4,14 @@ import { connectDB } from '@/lib/db';
 import Task from '@/models/Task';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/constants';
+import { taskSchema } from '@/lib/validations';
+import { ZodError } from 'zod';
+import { getISTDateStr } from '@/lib/attendance-utils';
 
-function todayIST() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
-}
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildSummary(tasks: any[]) {
-  const summary: any = {
+  const summary: Record<string, number> = {
     total: tasks.length,
     todo: 0,
     in_progress: 0,
@@ -24,6 +25,7 @@ function buildSummary(tasks: any[]) {
   return summary;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeTask(task: any) {
   return {
     _id: task._id.toString(),
@@ -46,8 +48,9 @@ function normalizeTask(task: any) {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function refreshOverdue(tasks: any[]) {
-  const today = todayIST();
+  const today = getISTDateStr();
   for (const t of tasks) {
     if (t.dueDate && t.dueDate < today && !['completed', 'cancelled', 'overdue'].includes(t.status)) {
       t.status = 'overdue';
@@ -56,22 +59,33 @@ async function refreshOverdue(tasks: any[]) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     await connectDB();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const query: any = {};
     if (user.role === 'employee') query.assignedTo = user.id;
 
-    const docs = await Task.find(query).sort({ createdAt: -1 });
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const limit = Math.min(parseInt(searchParams.get('limit') || String(DEFAULT_PAGE_LIMIT)), MAX_PAGE_LIMIT);
+    const skip = (page - 1) * limit;
+
+    const [docs, total] = await Promise.all([
+      Task.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Task.countDocuments(query),
+    ]);
+
     await refreshOverdue(docs);
 
     const tasks = docs.map(normalizeTask);
-    return NextResponse.json({ ok: true, tasks, summary: buildSummary(tasks) });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ ok: true, tasks, summary: buildSummary(tasks), total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -82,11 +96,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Admin/Manager only' }, { status: 403 });
     }
 
-    const { title, description, assignedTo, assignedToName, dueDate, priority, teamName, teamId } = await req.json();
+    const body = await req.json();
+    let parsed;
+    try {
+      parsed = taskSchema.parse(body);
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
+      }
+      throw e;
+    }
+
+    const { title, description, assignedTo, assignedToName, dueDate, priority, teamName, teamId } = parsed;
     if (!title || !assignedTo) return NextResponse.json({ error: 'title and assignedTo are required' }, { status: 400 });
     if (!mongoose.Types.ObjectId.isValid(assignedTo)) return NextResponse.json({ error: 'Invalid assignedTo' }, { status: 400 });
 
     await connectDB();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const assignee = await User.findById(assignedTo).populate('officeZoneId', 'name').lean() as any;
     if (!assignee) return NextResponse.json({ error: 'Assignee not found' }, { status: 404 });
 
@@ -105,8 +131,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, task: normalizeTask(task) });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -137,7 +164,8 @@ export async function PATCH(req: NextRequest) {
 
     await task.save();
     return NextResponse.json({ ok: true, task: normalizeTask(task) });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -3,9 +3,19 @@ import bcrypt from 'bcryptjs';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
 import OfficeZone from '@/models/OfficeZone';
+import { getAuthUser } from '@/lib/auth';
+import { BCRYPT_SALT_ROUNDS } from '@/lib/constants';
 
 export async function GET() {
   try {
+    // Only allow in development or for admin users
+    if (process.env.NODE_ENV === 'production') {
+      const user = await getAuthUser();
+      if (!user || user.role !== 'admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+
     await connectDB();
 
     // Reset office zones
@@ -34,7 +44,7 @@ export async function GET() {
       { fullName: 'Ammar Logade', email: 'ammar.gharpayy@gmail.com', role: 'employee' },
     ];
 
-    const hash = await bcrypt.hash('Pass@1234', 12);
+    const hash = await bcrypt.hash('Pass@1234', BCRYPT_SALT_ROUNDS);
     const empResults = [];
 
     for (const emp of employees) {
@@ -48,8 +58,8 @@ export async function GET() {
     }
 
     return NextResponse.json({ ok: true, zones: zoneResults, employees: empResults });
-  } catch (err: any) {
-    console.error('Seed error:', err);
-    return NextResponse.json({ ok: false, error: err.message || 'Unknown error' }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('Seed error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

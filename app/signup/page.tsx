@@ -42,11 +42,10 @@ export default function SignupPage() {
         if (data.ok) {
           setZones(data.zones);
         } else {
-          console.error('Failed to fetch zones:', data.error);
           setError(`Zone loading failed: ${data.error}`);
         }
       } catch (err) {
-        console.error('Failed to fetch zones:', err);
+        // Zone fetch error handled silently
       } finally {
         setZoneLoading(false);
       }

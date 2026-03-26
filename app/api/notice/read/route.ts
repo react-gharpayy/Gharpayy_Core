@@ -1,9 +1,9 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Notice from '@/models/Notice';
 import { getAuthUser } from '@/lib/auth';
 
-// POST €” mark notice as read
+// POST - mark notice as read
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

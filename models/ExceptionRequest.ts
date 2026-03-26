@@ -30,4 +30,6 @@ const ExceptionRequestSchema = new Schema<IExceptionRequest>({
   reviewedAt:     { type: Date, default: null },
 }, { timestamps: true });
 
+ExceptionRequestSchema.index({ employeeId: 1, status: 1 });
+
 export default mongoose.models.GpException || mongoose.model<IExceptionRequest>('GpException', ExceptionRequestSchema);

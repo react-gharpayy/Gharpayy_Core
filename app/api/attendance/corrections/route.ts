@@ -6,6 +6,8 @@ import ExceptionRequest from '@/models/ExceptionRequest';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
 import { deriveStatusFromAttendance, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
+import { correctionSchema } from '@/lib/validations';
+import { ZodError } from 'zod';
 
 function toDateInIST(date: string, time: string) {
   const [y, m, d] = date.split('-').map(Number);
@@ -20,13 +22,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { employeeId, date, clockIn, clockOut, reason } = await req.json();
+    const body = await req.json();
+    let parsed;
+    try {
+      parsed = correctionSchema.parse(body);
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
+      }
+      throw e;
+    }
+
+    const { employeeId, date, clockIn, clockOut, reason } = parsed;
     if (!employeeId || !date || !clockIn || !clockOut) {
       return NextResponse.json({ error: 'employeeId, date, clockIn, clockOut required' }, { status: 400 });
     }
     if (!mongoose.Types.ObjectId.isValid(employeeId)) return NextResponse.json({ error: 'Invalid employeeId' }, { status: 400 });
 
     await connectDB();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const emp = await User.findById(employeeId).lean() as any;
     if (!emp) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
 
@@ -68,7 +82,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, attendanceId: att._id.toString() });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

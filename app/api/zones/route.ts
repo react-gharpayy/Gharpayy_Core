@@ -7,7 +7,8 @@ export async function GET() {
     await connectDB();
     const zones = await OfficeZone.find().sort({ name: 1 });
     return NextResponse.json({ ok: true, zones });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

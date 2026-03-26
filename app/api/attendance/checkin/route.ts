@@ -131,7 +131,8 @@ export async function POST(req: NextRequest) {
       lateByMins: att.lateByMins || 0,
       earlyByMins: att.earlyByMins || 0,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

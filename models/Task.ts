@@ -36,4 +36,6 @@ const TaskSchema = new Schema<ITask>({
   completedAt:     { type: Date, default: null },
 }, { timestamps: true });
 
+TaskSchema.index({ assignedTo: 1 });
+
 export default mongoose.models.GpTask || mongoose.model<ITask>('GpTask', TaskSchema);

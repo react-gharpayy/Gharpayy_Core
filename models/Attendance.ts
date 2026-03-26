@@ -53,5 +53,6 @@ const AttendanceSchema = new Schema<IAttendance>({
 }, { timestamps: true });
 
 AttendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
+AttendanceSchema.index({ date: 1 });
 
 export default mongoose.models.GpAttendance || mongoose.model<IAttendance>('GpAttendance', AttendanceSchema);

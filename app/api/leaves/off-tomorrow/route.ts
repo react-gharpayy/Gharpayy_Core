@@ -3,9 +3,10 @@ import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import User from '@/models/User';
 import mongoose from 'mongoose';
+import { IST_OFFSET_MS } from '@/lib/constants';
 
 function getISTDate(offsetDays = 0) {
-  const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const d = new Date(Date.now() + IST_OFFSET_MS);
   d.setUTCDate(d.getUTCDate() + offsetDays);
   return d.toISOString().split('T')[0];
 }
@@ -25,17 +26,21 @@ export async function POST() {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const tomorrow = getISTDate(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const leaves = Array.isArray(user.leaves) ? user.leaves : [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const exists = leaves.some((l: any) => l.date === tomorrow && l.type === 'day_off');
     if (!exists) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       leaves.push({ date: tomorrow, type: 'day_off', status: 'approved' } as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       user.leaves = leaves as any;
       await user.save();
     }
 
     return NextResponse.json({ ok: true, leave: { date: tomorrow, type: 'day_off', status: 'approved' } });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

@@ -3,11 +3,7 @@ import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
-
-function getISTDate() {
-  const now = new Date();
-  return new Date(now.getTime() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
-}
+import { getISTDateStr } from '@/lib/attendance-utils';
 
 const IST_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: 'numeric',
@@ -26,14 +22,17 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     await connectDB();
-    const today = getISTDate();
+    const today = getISTDateStr();
 
     const users = await User.find({}, 'fullName email role');
     const todayAtt = await Attendance.find({ date: today });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const employees = users.map((u: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const att = todayAtt.find((a: any) => a.employeeId.toString() === u._id.toString());
       // Get last session with GPS
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const lastSessionWithGps = att?.sessions?.slice().reverse().find((s: any) => s.lat && s.lng);
       const lastSession = att?.sessions?.[att.sessions.length - 1];
 
@@ -51,10 +50,12 @@ export async function GET() {
       };
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const present = employees.filter((e: any) => e.dayStatus !== 'Absent').length;
 
     return NextResponse.json({ employees, present, total: users.length });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

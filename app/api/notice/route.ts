@@ -1,10 +1,13 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Notice from '@/models/Notice';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
+import { NOTICE_LIMIT } from '@/lib/constants';
+import { noticeSchema } from '@/lib/validations';
+import { ZodError } from 'zod';
 
-// GET €” fetch notices for current user
+// GET - fetch notices for current user
 export async function GET() {
   try {
     const user = await getAuthUser();
@@ -17,7 +20,7 @@ export async function GET() {
     let notices;
     if (isManager) {
       // Managers see all notices they created + all general notices
-      notices = await Notice.find({}).sort({ createdAt: -1 }).limit(50);
+      notices = await Notice.find({}).sort({ createdAt: -1 }).limit(NOTICE_LIMIT);
     } else {
       // Employees see notices targeting them or all employees
       notices = await Notice.find({
@@ -25,10 +28,11 @@ export async function GET() {
           { targetId: null },
           { targetId: user.id },
         ]
-      }).sort({ createdAt: -1 }).limit(50);
+      }).sort({ createdAt: -1 }).limit(NOTICE_LIMIT);
     }
 
     // Add isRead flag per notice for this user
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const noticesWithRead = notices.map((n: any) => ({
       _id: n._id.toString(),
       title: n.title,
@@ -43,15 +47,17 @@ export async function GET() {
       createdAt: n.createdAt,
     }));
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const unreadCount = noticesWithRead.filter((n: any) => !n.isRead).length;
 
     return NextResponse.json({ notices: noticesWithRead, unreadCount });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// POST €” create notice (manager/admin only)
+// POST - create notice (manager/admin only)
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -60,10 +66,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only managers can create notices' }, { status: 403 });
     }
 
-    const { title, message, type, targetId } = await req.json();
-    if (!title || !message) {
-      return NextResponse.json({ error: 'Title and message required' }, { status: 400 });
+    const body = await req.json();
+    let parsed;
+    try {
+      parsed = noticeSchema.parse(body);
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
+      }
+      throw e;
     }
+
+    const { title, message, type, targetId } = parsed;
 
     await connectDB();
 
@@ -85,12 +99,13 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, notice });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// DELETE €” delete notice (manager/admin only)
+// DELETE - delete notice (manager/admin only)
 export async function DELETE(req: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -104,8 +119,8 @@ export async function DELETE(req: NextRequest) {
     const deleted = await Notice.findByIdAndDelete(id);
     if (!deleted) return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

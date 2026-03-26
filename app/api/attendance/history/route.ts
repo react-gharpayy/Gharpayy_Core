@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import { getAuthUser } from '@/lib/auth';
-
-function getISTDateStr(d = new Date()) {
-  return new Date(d.getTime() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
-}
+import { getISTDateStr } from '@/lib/attendance-utils';
 
 function getMonthRange(ym?: string) {
   const base = ym && /^\d{4}-\d{2}$/.test(ym) ? `${ym}-01` : `${getISTDateStr().slice(0, 7)}-01`;
@@ -33,6 +30,7 @@ export async function GET(req: NextRequest) {
     await connectDB();
     const range = start && end ? { start, end } : getMonthRange(month || undefined);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = await Attendance.find({
       employeeId,
       date: { $gte: range.start, $lte: range.end },
@@ -40,8 +38,11 @@ export async function GET(req: NextRequest) {
       .sort({ date: -1 })
       .lean() as any[];
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const records = rows.map((r: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const firstWork = (r.sessions || []).find((s: any) => (s.type || 'work') !== 'break');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const lastClosed = [...(r.sessions || [])].reverse().find((s: any) => !!s.checkOut);
       return {
         date: r.date,
@@ -63,14 +64,18 @@ export async function GET(req: NextRequest) {
       records,
       summary: {
         totalDays: records.length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         presentDays: records.filter((r: any) => r.dayStatus !== 'Absent').length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         lateDays: records.filter((r: any) => r.dayStatus === 'Late').length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         earlyDays: records.filter((r: any) => r.dayStatus === 'Early').length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         totalWorkMins: records.reduce((s: number, r: any) => s + Number(r.totalWorkMins || 0), 0),
       },
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

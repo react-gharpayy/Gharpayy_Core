@@ -2,6 +2,7 @@ import Attendance from '@/models/Attendance';
 import OfficeZone from '@/models/OfficeZone';
 import User from '@/models/User';
 import { notifyMissedClockOut } from '@/lib/system-notifications';
+import { IST_OFFSET_MS } from '@/lib/constants';
 
 export type ShiftRules = {
   shiftStart: string;
@@ -18,7 +19,7 @@ export const DEFAULT_SHIFT_RULES: ShiftRules = {
 };
 
 export function getISTDateStr(date = new Date()) {
-  return new Date(date.getTime() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
+  return new Date(date.getTime() + IST_OFFSET_MS).toISOString().split('T')[0];
 }
 
 function parseHHMM(timeStr: string) {
@@ -29,10 +30,11 @@ function parseHHMM(timeStr: string) {
 }
 
 function getISTMinutes(date: Date) {
-  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+  const ist = new Date(date.getTime() + IST_OFFSET_MS);
   return ist.getUTCHours() * 60 + ist.getUTCMinutes();
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeShiftRules(zone: any): ShiftRules {
   const shiftStart = typeof zone?.shiftStart === 'string' ? zone.shiftStart : DEFAULT_SHIFT_RULES.shiftStart;
   const shiftEnd = typeof zone?.shiftEnd === 'string' ? zone.shiftEnd : DEFAULT_SHIFT_RULES.shiftEnd;
@@ -59,7 +61,9 @@ export function getStatusByShiftRules(checkInAt: Date, rules: ShiftRules) {
   return { dayStatus: 'Late' as const, earlyByMins: 0, lateByMins: checkInMins - (shiftStartMins + rules.graceMinutes) };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function deriveStatusFromAttendance(att: any, rules: ShiftRules) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const firstWork = (att?.sessions || []).find((s: any) => (s?.type || 'work') !== 'break');
   if (!firstWork?.checkIn) return { dayStatus: 'Absent' as const, earlyByMins: 0, lateByMins: 0 };
   return getStatusByShiftRules(new Date(firstWork.checkIn), rules);
@@ -74,7 +78,9 @@ function sessionMins(checkIn: Date, checkOut: Date) {
   return Math.max(0, Math.floor((checkOut.getTime() - checkIn.getTime()) / 60000));
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function recomputeAttendanceTotals(att: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getMins = (s: any) => {
     const explicit = Number.isFinite(Number(s?.minutes)) ? Number(s.minutes) : null;
     const legacy = Number.isFinite(Number(s?.workMinutes)) ? Number(s.workMinutes) : 0;
@@ -82,10 +88,12 @@ export function recomputeAttendanceTotals(att: any) {
     if (explicit === 0 && legacy > 0) return legacy; // legacy records where minutes defaulted to 0
     return explicit ?? legacy ?? 0;
   };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   att.totalWorkMins = (att.sessions || []).reduce((sum: number, s: any) => {
     const mins = getMins(s);
     return sum + ((s.type || 'work') === 'break' ? 0 : mins);
   }, 0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   att.totalBreakMins = (att.sessions || []).reduce((sum: number, s: any) => {
     const mins = getMins(s);
     return sum + ((s.type || 'work') === 'break' ? mins : 0);
@@ -94,6 +102,7 @@ export function recomputeAttendanceTotals(att: any) {
 
 export async function autoCloseMissedClockOut(employeeId?: string) {
   const today = getISTDateStr();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const query: any = {
     date: { $lt: today },
     $or: [{ isCheckedIn: true }, { isOnBreak: true }, { isInField: true }],
@@ -104,34 +113,39 @@ export async function autoCloseMissedClockOut(employeeId?: string) {
   let updated = 0;
 
   for (const att of rows) {
-    const sessions = att.sessions || [];
-    const last = sessions[sessions.length - 1];
-    const closeAt = endOfISTDayAsUTC(att.date);
-    let changed = false;
+    try {
+      const sessions = att.sessions || [];
+      const last = sessions[sessions.length - 1];
+      const closeAt = endOfISTDayAsUTC(att.date);
+      let changed = false;
 
-    if (last && !last.checkOut) {
-      last.checkOut = closeAt;
-      const mins = sessionMins(new Date(last.checkIn), closeAt);
-      last.minutes = mins;
-      if (last.type !== 'break') last.workMinutes = mins;
-      changed = true;
-    }
+      if (last && !last.checkOut) {
+        last.checkOut = closeAt;
+        const mins = sessionMins(new Date(last.checkIn), closeAt);
+        last.minutes = mins;
+        if (last.type !== 'break') last.workMinutes = mins;
+        changed = true;
+      }
 
-    att.isCheckedIn = false;
-    att.isOnBreak = false;
-    att.isInField = false;
-    if (att.dayStatus !== 'Absent') att.workMode = 'Present';
-    recomputeAttendanceTotals(att);
-    att.markModified('sessions');
-    await att.save();
-    if (changed) {
-      const emp = await User.findById(att.employeeId, 'fullName').lean() as any;
-      await notifyMissedClockOut({
-        employeeId: String(att.employeeId),
-        employeeName: emp?.fullName || 'Employee',
-        date: att.date,
-      });
-      updated++;
+      att.isCheckedIn = false;
+      att.isOnBreak = false;
+      att.isInField = false;
+      if (att.dayStatus !== 'Absent') att.workMode = 'Present';
+      recomputeAttendanceTotals(att);
+      att.markModified('sessions');
+      await att.save();
+      if (changed) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const emp = await User.findById(att.employeeId, 'fullName').lean() as any;
+        await notifyMissedClockOut({
+          employeeId: String(att.employeeId),
+          employeeName: emp?.fullName || 'Employee',
+          date: att.date,
+        });
+        updated++;
+      }
+    } catch (err) {
+      console.error(`Failed to auto-close attendance ${att._id}:`, err);
     }
   }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
-import OfficeZone from '@/models/OfficeZone';
+import '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
 
 // GET - List pending/approved employees
@@ -17,18 +17,20 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status'); // 'pending' or 'approved' or 'all'
 
-    let query: any = { role: 'employee' };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const query: any = { role: 'employee' };
     if (status === 'pending') query.isApproved = false;
     if (status === 'approved') query.isApproved = true;
 
     const employees = await User.find(query)
       .populate('officeZoneId', 'name')
-      .select('-password')
+      .select('-password -profilePhoto')
       .sort({ createdAt: -1 });
 
     return NextResponse.json({ ok: true, count: employees.length, employees });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -65,8 +67,9 @@ export async function POST(req: NextRequest) {
       await User.findByIdAndDelete(employeeId);
       return NextResponse.json({ ok: true, message: `Rejected ${employee.fullName}` });
     }
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -94,7 +97,8 @@ export async function PUT(req: NextRequest) {
 
     await employee.save();
     return NextResponse.json({ ok: true, message: 'Employee updated', employee });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

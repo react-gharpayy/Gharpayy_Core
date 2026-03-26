@@ -1,10 +1,11 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import OfficeZone from '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
-import { autoCloseMissedClockOut, deriveStatusFromAttendance, getShiftRules } from '@/lib/attendance-utils';
+import { deriveStatusFromAttendance, getISTDateStr, getShiftRules } from '@/lib/attendance-utils';
+import { IST_OFFSET_MS } from '@/lib/constants';
 
 const IST_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
@@ -15,7 +16,7 @@ function fmtTime(d: Date) {
 }
 
 function getISTNow() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return new Date(Date.now() + IST_OFFSET_MS);
 }
 
 function getTodayIST() {
@@ -66,13 +67,13 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get('dateTo');
 
     await connectDB();
-    await autoCloseMissedClockOut();
 
     const isManager = user.role === 'admin' || user.role === 'manager';
     const todayStr  = getTodayIST();
     const logDate   = date || todayStr;
 
     // Get week off day + shift rules from DB
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const zone = await OfficeZone.findOne({}).lean() as any;
     const rules = await getShiftRules();
     const weekOffDay   = zone?.weekOffDay || 'Tuesday';
@@ -105,21 +106,27 @@ export async function GET(req: NextRequest) {
     else if (week) dates = getWeekDatesFromStr(week);
 
     if (isManager) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userQuery: any = {};
       if (teamId) userQuery.officeZoneId = teamId;
       if (managerId) userQuery.managerId = managerId;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const users = await User.find(userQuery, 'fullName email role officeZoneId isApproved')
+        .select('-profilePhoto')
         .populate('officeZoneId', 'name')
         .lean() as any[];
 
       const employeeIds = users.map(u => u._id.toString());
 
       // Heatmap attendance
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const attQuery: any = { employeeId: { $in: employeeIds } };
       if (dates.length > 0) attQuery.date = { $in: dates };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allAtt = await Attendance.find(attQuery).lean() as any[];
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const heatmap = users.map((u: any) => {
         const empAtt = allAtt.filter(a => a.employeeId.toString() === u._id.toString());
         const days: Record<string, string> = {};
@@ -128,18 +135,20 @@ export async function GET(req: NextRequest) {
           employeeId:   u._id.toString(),
           employeeName: u.fullName,
           role:         u.role,
-          team:         (u.officeZoneId as any)?.name || 'No Zone',
+          team:         (u.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
           isApproved:   u.isApproved,
           days,
         };
       });
 
       // Selected date log
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const logAtt = await Attendance.find({
         employeeId: { $in: employeeIds },
         date: logDate,
       }).lean() as any[];
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let todayLog = users
         .map((u: any) => {
           const att       = logAtt.find(a => a.employeeId.toString() === u._id.toString());
@@ -149,7 +158,7 @@ export async function GET(req: NextRequest) {
             employeeId:    u._id.toString(),
             employeeName:  u.fullName,
             role:          u.role,
-            team:          (u.officeZoneId as any)?.name || 'No Zone',
+            team:          (u.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
             checkInTime:   firstSess?.checkIn ? fmtTime(new Date(firstSess.checkIn)) : null,
             isCheckedIn:   att?.isCheckedIn || false,
             workMode:      att?.workMode || (att?.isOnBreak ? 'Break' : att?.isInField ? 'Field' : att?.isCheckedIn ? 'Present' : 'Absent'),
@@ -162,15 +171,19 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => statusSortOrder(a.dayStatus) - statusSortOrder(b.dayStatus));
 
       if (statusFilter && statusFilter !== 'all') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         todayLog = todayLog.filter((e: any) => e.dayStatus === statusFilter || e.workMode === statusFilter);
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const present = todayLog.filter((e: any) => e.dayStatus !== 'Absent').length;
 
       const yesterday = new Date(logDate);
       yesterday.setDate(yesterday.getDate() - 1);
       const yDate = yesterday.toISOString().split('T')[0];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const yAtt = await Attendance.find({ employeeId: { $in: employeeIds }, date: yDate }).lean() as any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const yPresent = yAtt.filter((a: any) => (a.dayStatus || 'Absent') !== 'Absent').length;
 
       // 7-day trend and team comparison
@@ -181,17 +194,22 @@ export async function GET(req: NextRequest) {
         trendDates.push(new Date(cursor).toISOString().split('T')[0]);
         cursor.setDate(cursor.getDate() + 1);
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const trendAtt = await Attendance.find({ employeeId: { $in: employeeIds }, date: { $in: trendDates } }).lean() as any[];
       const lateTrend = trendDates.map(d => ({
         date: d,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         late: trendAtt.filter((a: any) => a.date === d && a.dayStatus === 'Late').length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         present: trendAtt.filter((a: any) => a.date === d && a.dayStatus !== 'Absent').length,
       }));
       const teamComparison = Object.values(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         users.reduce((acc: any, u: any) => {
-          const team = (u.officeZoneId as any)?.name || 'No Zone';
+          const team = String((u.officeZoneId as Record<string, unknown>)?.name || 'No Zone');
           if (!acc[team]) acc[team] = { team, total: 0, present: 0, late: 0 };
           acc[team].total += 1;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const a = logAtt.find((x: any) => x.employeeId.toString() === u._id.toString());
           const status = a?.dayStatus || 'Absent';
           if (status !== 'Absent') acc[team].present += 1;
@@ -213,10 +231,12 @@ export async function GET(req: NextRequest) {
       });
 
     } else {
-      // Employee €” own data only
+      // Employee - own data only
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const attQuery: any = { employeeId: user.id };
       if (dates.length > 0) attQuery.date = { $in: dates };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const empAtt = await Attendance.find(attQuery).lean() as any[];
       const days: Record<string, string> = {};
       for (const a of empAtt) days[a.date] = a.dayStatus;
@@ -229,8 +249,8 @@ export async function GET(req: NextRequest) {
         shiftInfo,
       });
     }
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

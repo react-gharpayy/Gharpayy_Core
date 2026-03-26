@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
-import { autoCloseMissedClockOut, getISTDateStr, recomputeAttendanceTotals } from '@/lib/attendance-utils';
+import { getISTDateStr, recomputeAttendanceTotals } from '@/lib/attendance-utils';
 import { notifyDailySummary } from '@/lib/system-notifications';
 
 export async function POST(req: NextRequest) {
@@ -15,7 +15,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const type = body?.type as string | undefined;
     await connectDB();
-    await autoCloseMissedClockOut(user.id);
 
     const date = getISTDateStr();
     const att = await Attendance.findOne({ employeeId: user.id, date });
@@ -68,6 +67,7 @@ export async function POST(req: NextRequest) {
     await att.save();
 
     if (finalClockOut) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const emp = await User.findById(user.id, 'fullName').lean() as any;
       await notifyDailySummary({
         employeeId: user.id,
@@ -88,7 +88,8 @@ export async function POST(req: NextRequest) {
       totalBreakMins: att.totalBreakMins || 0,
       workMode: att.workMode,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

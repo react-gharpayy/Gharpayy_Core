@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import User from '@/models/User';
 import mongoose from 'mongoose';
 
-function isValidTime(v: any) {
+function isValidTime(v: unknown) {
   return typeof v === 'string' && /^\d{2}:\d{2}$/.test(v);
 }
 
@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     }
 
     await connectDB();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const user = await User.findById(targetId).select('fullName email role workSchedule').lean() as any;
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
@@ -32,8 +33,9 @@ export async function GET(req: NextRequest) {
       role: user.role,
       workSchedule: user.workSchedule || null,
     }});
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -62,10 +64,11 @@ export async function PATCH(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const existing = user.workSchedule || {};
-    if (!isAdminActor && existing.isLocked) {
+    if (!isAdminActor && (existing as Record<string, unknown>).isLocked) {
       return NextResponse.json({ error: 'Work schedule is locked. Contact admin.' }, { status: 403 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     user.workSchedule = {
       startTime,
       endTime,
@@ -77,8 +80,8 @@ export async function PATCH(req: NextRequest) {
     await user.save();
 
     return NextResponse.json({ ok: true, workSchedule: user.workSchedule });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    console.error('API error:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-
