@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
+  const [email, setEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ export default function ForgotPasswordPage() {
       const r = await fetch('/api/auth/request-password-change', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPassword, confirmPassword }),
+        body: JSON.stringify({ email, newPassword, confirmPassword }),
       });
       const d = await r.json();
       if (!r.ok) {
@@ -48,7 +49,7 @@ export default function ForgotPasswordPage() {
 
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
           <h2 className="text-xl font-bold text-gray-800 mb-1">Reset Password</h2>
-          <p className="text-sm text-gray-700 mb-6">Submit a new password for admin approval</p>
+        <p className="text-sm text-gray-700 mb-6">Submit a new password for admin approval</p>
 
           {msg && (
             <div className={`flex items-start gap-2 border text-sm rounded-2xl p-3.5 mb-5 ${
@@ -60,6 +61,12 @@ export default function ForgotPasswordPage() {
           )}
 
           <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Employee Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="employee@gharpayy.com"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 transition" />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">New Password</label>
               <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
@@ -87,4 +94,3 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
-

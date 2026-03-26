@@ -4,8 +4,9 @@ import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { passwordChangeSchema } from '@/lib/validations';
+import { z, ZodError } from 'zod';
 import PasswordChangeRequest from '@/models/PasswordChangeRequest';
-import { ZodError } from 'zod';
+import User from '@/models/User';
 import mongoose from 'mongoose';
 
 export async function POST(req: NextRequest) {
@@ -16,21 +17,32 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await getAuthUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.id === 'admin') return NextResponse.json({ error: 'Admin account cannot use this flow' }, { status: 400 });
-    if (!mongoose.Types.ObjectId.isValid(user.id)) return NextResponse.json({ error: 'Invalid user' }, { status: 400 });
-
     const body = await req.json().catch(() => ({}));
     const parsed = passwordChangeSchema.parse(body);
     const hash = await bcrypt.hash(parsed.newPassword, 12);
 
     await connectDB();
 
+    let targetUserId: string | null = null;
+
+    if (user && user.id !== 'admin' && mongoose.Types.ObjectId.isValid(user.id)) {
+      targetUserId = user.id;
+    } else if (body?.email) {
+      const email = z.string().email().parse(body.email);
+      const u = await User.findOne({ email: email.toLowerCase(), role: 'employee' }).select('_id').lean() as any;
+      targetUserId = u?._id?.toString() || null;
+    }
+
+    if (!targetUserId) {
+      // Do not leak user existence
+      return NextResponse.json({ ok: true, message: 'Password change request submitted for approval' });
+    }
+
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const pending = await PasswordChangeRequest.findOne({
-      userId: user.id,
+      userId: targetUserId,
       status: 'pending',
       $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
     }).select('_id').lean();
@@ -40,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     await PasswordChangeRequest.create({
-      userId: user.id,
+      userId: targetUserId,
       newPasswordHash: hash,
       status: 'pending',
       expiresAt,
@@ -54,4 +66,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-
