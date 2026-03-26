@@ -14,14 +14,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
     }
 
-    const body = await req.json();
-    const { email, password } = loginSchema.parse(body);
-    const normEmail = String(email).trim().toLowerCase();
-    const normPass = String(password).trim();
+    const body = await req.json().catch(() => ({}));
+    const rawEmail = typeof body?.email === 'string' ? body.email : '';
+    const rawPass = typeof body?.password === 'string' ? body.password : '';
+    const normEmail = String(rawEmail).trim().toLowerCase();
+    const normPass = String(rawPass).trim();
     const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const adminPass = String(process.env.ADMIN_PASSWORD || '').trim();
-
-    await connectDB();
 
     // Admin static check
     if (adminEmail && adminPass && normEmail === adminEmail && normPass === adminPass) {
@@ -31,7 +30,12 @@ export async function POST(req: NextRequest) {
       return res;
     }
 
-    const user = await User.findOne({ email: normEmail });
+    // Non-admin: enforce schema
+    const { email, password } = loginSchema.parse({ email: normEmail, password: normPass });
+
+    await connectDB();
+
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
 
     const valid = await bcrypt.compare(password, user.password);
