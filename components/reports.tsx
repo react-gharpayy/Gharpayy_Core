@@ -46,7 +46,7 @@ export default function Reports() {
   return (
     <div className="space-y-4">
       <div style={card} className="p-5">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Reports</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">ARENA OS - Reports</h1>
         <div className="text-xs" style={{ color: '#6b7280' }}>Export operational data</div>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>

@@ -72,7 +72,7 @@ export default function MyHistory() {
           <div style={card} className="p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">My History</h1>
+                <h1 className="text-2xl font-bold text-gray-900">ARENA OS - My History</h1>
                 <div className="text-xs mt-1" style={{ color: '#6b7280' }}>{label}</div>
               </div>
               <div className="flex items-center gap-2">

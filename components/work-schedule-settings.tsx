@@ -102,7 +102,7 @@ export default function WorkScheduleSettings() {
   return (
     <div className="space-y-4">
       <div style={card} className="p-5">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Settings</h1>
         <p className="text-xs mt-1 text-gray-700">Work timing and break timing configuration</p>
       </div>
 
@@ -163,4 +163,3 @@ export default function WorkScheduleSettings() {
     </div>
   );
 }
-

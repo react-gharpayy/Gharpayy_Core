@@ -60,7 +60,7 @@ export default function KPIsDashboard() {
   return (
     <div className="space-y-4">
       <div style={card} className="p-5">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">KPIs &amp; KRAs</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">ARENA OS - Performance Analytics</h1>
         <div className="text-xs" style={{ color: '#6b7280' }}>Performance metrics - this week</div>
       </div>
 

@@ -114,7 +114,7 @@ export default function CommandCenter() {
                 {summary.activeNow} of {summary.total} Active Today
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Command Center</h1>
+            <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Workforce Overview</h1>
             <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
               {time} - Bangalore
             </div>

@@ -52,11 +52,11 @@ export default function EmployeeSidebar() {
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-orange-500">A</div>
             <div>
-              <div className="text-sm font-bold text-gray-900 leading-tight">ARENA OS</div>
-              <div className="text-[11px] text-gray-700">Attendance System</div>
+              <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
+              <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
             </div>
           </div>
-          <div className="text-xs text-gray-700 mt-3">ARENA OS</div>
+          <div className="text-xs text-gray-700 mt-3">Gharpayy - ARENA OS</div>
         </div>
 
         <nav className="flex-1 px-3 py-4 overflow-y-auto no-scrollbar">
@@ -116,7 +116,7 @@ export default function EmployeeSidebar() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold bg-orange-500">A</div>
-            <div className="text-sm font-semibold text-gray-900">ARENA OS</div>
+            <div className="text-sm font-semibold text-gray-900">Gharpayy - ARENA OS</div>
           </div>
           <div className="flex items-center gap-2">
             <button

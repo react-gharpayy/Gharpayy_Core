@@ -177,7 +177,7 @@ export default function LiveAttendance() {
       <div style={card} className="p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Live Attendance</h1>
+            <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Attendance Management</h1>
             <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
               {isToday ? 'Today' : selectedDate} - <span style={{ color: '#10b981' }}>{present}</span>/{total} present
             </div>

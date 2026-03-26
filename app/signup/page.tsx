@@ -153,7 +153,10 @@ export default function SignupPage() {
         {/* Header */}
         <div className="flex items-center justify-center gap-2.5 mb-8">
           <img src="/logo.png" alt="ARENA OS" className="h-20 w-auto" onError={e => { (e.target as any).style.display = 'none'; }} />
-          <span className="text-2xl font-bold text-orange-500">ARENA OS</span>
+          <div className="text-center">
+            <div className="text-base font-bold text-gray-900">Gharpayy</div>
+            <div className="text-sm font-bold text-orange-500">ARENA OS</div>
+          </div>
         </div>
 
         {/* Progress indicator */}

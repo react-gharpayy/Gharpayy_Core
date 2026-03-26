@@ -29,6 +29,10 @@ export default function Header() {
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="ARENA OS" className="h-10 w-auto"
             onError={e => { (e.target as any).style.display='none'; }} />
+          <div>
+            <div className="text-sm font-bold text-gray-900">Gharpayy</div>
+            <div className="text-xs font-semibold text-orange-500">ARENA OS</div>
+          </div>
         </div>
         {isAdmin && (
           <button onClick={() => router.push('/admin')}

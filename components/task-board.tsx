@@ -79,7 +79,7 @@ export default function TaskBoard() {
       {/* Header */}
       <div style={card} className="p-5 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Task Board</h1>
+          <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Task Management Console</h1>
           <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
             {summary.total || 0} tasks  -  {summary.completed || 0} done  -  {summary.blocked || 0} blocked
           </div>

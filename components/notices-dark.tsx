@@ -76,7 +76,7 @@ export default function NoticesPage({ isAdmin = true }: { isAdmin?: boolean }) {
       <div style={card} className="p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Notices</h1>
+            <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Announcements Hub</h1>
             <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
               {notices.length} total  -  {counts.warning + counts.urgent} alerts
             </div>

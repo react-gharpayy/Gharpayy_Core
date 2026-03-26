@@ -123,7 +123,7 @@ export default function TeamHierarchy() {
   return (
     <div className="space-y-4">
       <div style={card} className="p-5">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Team Hierarchy</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">ARENA OS - Team Hierarchy</h1>
         <div className="text-xs" style={{ color: '#6b7280' }}>
           {groupedByZone ? 'Grouped by zone - assign team & department below' : 'Grouped by manager'}
         </div>

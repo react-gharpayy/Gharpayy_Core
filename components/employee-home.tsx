@@ -149,7 +149,10 @@ export default function EmployeeHome({ user }: { user: User }) {
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">A</span>
             </div>
-            <span className="text-lg font-bold text-orange-500">ARENA OS</span>
+            <div>
+              <div className="text-xs font-bold text-gray-900">Gharpayy</div>
+              <div className="text-sm font-bold text-orange-500">ARENA OS</div>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button

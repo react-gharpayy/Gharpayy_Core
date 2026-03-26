@@ -17,7 +17,7 @@ export default async function ClockPage() {
         <Navigation />
         <div className="max-w-2xl mx-auto px-4 py-6 md:py-8">
           <div className="mb-4">
-            <h1 className="text-xl font-bold text-gray-800">Clock In / Clock Out</h1>
+            <h1 className="text-xl font-bold text-gray-800">ARENA OS - Clock In / Clock Out</h1>
             <p className="text-sm text-gray-700 mt-1">Mark your own attendance</p>
           </div>
           <EmployeeDetail />
@@ -36,7 +36,10 @@ export default async function ClockPage() {
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">A</span>
             </div>
-            <span className="text-lg font-bold text-orange-500">ARENA OS</span>
+            <div>
+              <div className="text-xs font-bold text-gray-900">Gharpayy</div>
+              <div className="text-sm font-bold text-orange-500">ARENA OS</div>
+            </div>
           </div>
         </div>
       </header>
@@ -47,7 +50,7 @@ export default async function ClockPage() {
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">My Attendance</h1>
+          <h1 className="text-2xl font-bold text-gray-800">ARENA OS - My Attendance</h1>
           <p className="text-gray-700 text-sm mt-0.5">
             {new Date().toLocaleDateString('en-IN', {
               weekday: 'long', day: 'numeric', month: 'long',

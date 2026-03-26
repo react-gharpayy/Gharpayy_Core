@@ -48,7 +48,10 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2.5 mb-8">
           <img src="/logo.png" alt="ARENA OS" className="h-10 w-auto" onError={e => { (e.target as any).style.display = 'none'; }} />
-          <span className="text-2xl font-bold text-orange-500">ARENA OS</span>
+          <div className="text-center">
+            <div className="text-base font-bold text-gray-900">Gharpayy</div>
+            <div className="text-sm font-bold text-orange-500">ARENA OS</div>
+          </div>
         </div>
 
         <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
@@ -113,9 +116,12 @@ export default function LoginPage() {
               ) : 'Sign In'}
             </button>
           </form>
+          <div className="mt-3 text-right">
+            <a href="/forgot-password" className="text-xs text-orange-500 hover:underline font-semibold">Forgot Password?</a>
+          </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">ARENA OS Attendance - {new Date().getFullYear()}</p>
+        <p className="text-center text-xs text-gray-400 mt-6">Gharpayy - ARENA OS - {new Date().getFullYear()}</p>
         <p className="text-center text-xs text-gray-700 mt-3">New to ARENA OS? <a href="/signup" className="text-orange-500 hover:underline font-semibold">Sign up here</a></p>
       </div>
     </div>

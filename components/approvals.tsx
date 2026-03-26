@@ -37,6 +37,8 @@ export default function Approvals() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [corr, setCorr] = useState({ employeeId: '', date: '', clockIn: '10:00', clockOut: '19:00', reason: '' });
   const [corrSaving, setCorrSaving] = useState(false);
+  const [pwdRequests, setPwdRequests] = useState<any[]>([]);
+  const [pwdActing, setPwdActing] = useState<string | null>(null);
 
   const fetchData = (status = tab) => {
     setLoading(true);
@@ -46,8 +48,10 @@ export default function Approvals() {
         ? Promise.resolve({ ok: true, employees: [] as any[] })
         : fetch(`/api/employees/approvals?status=${status}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({}));
 
-    Promise.all([exceptionReq, employeeReq])
-      .then(([exData, empData]) => {
+    const pwdReq = fetch('/api/admin/password-requests', { cache: 'no-store' }).then(r => r.json()).catch(() => ({}));
+
+    Promise.all([exceptionReq, employeeReq, pwdReq])
+      .then(([exData, empData, pwdData]) => {
         const exceptionRows: Exception[] = Array.isArray(exData?.exceptions)
           ? exData.exceptions.map((e: any) => ({ ...e, source: 'exception' as const }))
           : [];
@@ -71,6 +75,7 @@ export default function Approvals() {
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setExceptions(merged);
+        if (Array.isArray(pwdData?.requests)) setPwdRequests(pwdData.requests);
 
         if (status === 'pending') {
           const exPending = Number(exData?.pendingCount || 0);
@@ -123,6 +128,15 @@ export default function Approvals() {
     setCorrSaving(false);
   };
 
+  const actPwd = async (id: string, action: 'approve' | 'reject') => {
+    setPwdActing(id);
+    try {
+      await fetch(`/api/admin/password-requests/${id}/${action}`, { method: 'POST' });
+      fetchData(tab);
+    } catch {}
+    setPwdActing(null);
+  };
+
   const card = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 20, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' };
 
   return (
@@ -130,7 +144,7 @@ export default function Approvals() {
       <div style={card} className="p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Approvals</h1>
+            <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Approval Center</h1>
             <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
               Exception requests from employees
             </div>
@@ -243,6 +257,45 @@ export default function Approvals() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      <div style={card} className="p-5">
+        <h2 className="text-sm font-bold text-gray-900 mb-3">Password Change Requests</h2>
+        {pwdRequests.length === 0 ? (
+          <div className="text-xs text-gray-700">No password change requests</div>
+        ) : (
+          <div className="space-y-2">
+            {pwdRequests.map((r: any) => (
+              <div key={r._id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{r.employeeName}</div>
+                  <div className="text-[11px]" style={{ color: '#6b7280' }}>{r.employeeEmail}</div>
+                  <div className="text-[10px]" style={{ color: '#9ca3af' }}>{new Date(r.createdAt).toLocaleString('en-IN')}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg"
+                    style={{ background: r.status === 'approved' ? 'rgba(16,185,129,0.15)' : r.status === 'rejected' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)', color: r.status === 'approved' ? '#10b981' : r.status === 'rejected' ? '#ef4444' : '#f59e0b' }}>
+                    {r.status}
+                  </span>
+                  {r.status === 'pending' && (
+                    <>
+                      <button onClick={() => actPwd(r._id, 'approve')} disabled={pwdActing === r._id}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                        style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                        Approve
+                      </button>
+                      <button onClick={() => actPwd(r._id, 'reject')} disabled={pwdActing === r._id}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                        style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                        Reject
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

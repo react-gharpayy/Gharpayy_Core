@@ -44,6 +44,8 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
   const [loading, setLoading] = useState(true);
   const [clocking, setClocking] = useState(false);
   const [msg, setMsg] = useState('');
+  const [resetPwd, setResetPwd] = useState({ newPassword: '', confirmPassword: '' });
+  const [resetting, setResetting] = useState(false);
 
   const fetchStatus = (empId?: string) => {
     const url = userRole === 'admin' || userRole === 'manager'
@@ -114,6 +116,35 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
   };
 
   const isIn = att?.isCheckedIn;
+  const doResetPassword = async () => {
+    if (!selectedEmployee || userRole !== 'admin') return;
+    if (!resetPwd.newPassword || !resetPwd.confirmPassword) {
+      flash('Enter password and confirm');
+      return;
+    }
+    setResetting(true);
+    try {
+      const r = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedEmployee,
+          newPassword: resetPwd.newPassword,
+          confirmPassword: resetPwd.confirmPassword,
+        }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        flash('Password reset updated');
+        setResetPwd({ newPassword: '', confirmPassword: '' });
+      } else {
+        flash(d.error || 'Reset failed');
+      }
+    } catch {
+      flash('Reset failed');
+    }
+    setResetting(false);
+  };
 
   return (
     <div className="bg-white rounded-3xl border border-gray-300 p-6 md:p-8">
@@ -134,6 +165,38 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
           >
             {employees.map(e => <option key={e._id} value={e._id}>{e.fullName}</option>)}
           </select>
+        </div>
+      )}
+      {userRole === 'admin' && selectedEmployee && (
+        <div className="mb-4 p-4 rounded-2xl" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+          <div className="text-sm font-semibold text-gray-900 mb-2">Admin Direct Reset</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input
+              type="password"
+              value={resetPwd.newPassword}
+              onChange={(e) => setResetPwd(p => ({ ...p, newPassword: e.target.value }))}
+              placeholder="New password"
+              className="px-3 py-2 rounded-xl text-sm focus:outline-none"
+              style={{ background: '#ffffff', border: '1px solid #e5e7eb', color: '#374151' }}
+            />
+            <input
+              type="password"
+              value={resetPwd.confirmPassword}
+              onChange={(e) => setResetPwd(p => ({ ...p, confirmPassword: e.target.value }))}
+              placeholder="Confirm password"
+              className="px-3 py-2 rounded-xl text-sm focus:outline-none"
+              style={{ background: '#ffffff', border: '1px solid #e5e7eb', color: '#374151' }}
+            />
+            <button
+              onClick={doResetPassword}
+              disabled={resetting}
+              className="px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
+              style={{ background: '#f97316', color: '#fff' }}
+            >
+              {resetting ? 'Resetting...' : 'Reset Password'}
+            </button>
+          </div>
+          <div className="text-[10px] text-gray-600 mt-2">Admin can reset password without approval.</div>
         </div>
       )}
 

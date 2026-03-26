@@ -5,6 +5,23 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+export const passwordChangeSchema = z.object({
+  newPassword: z.string().min(8).max(128),
+  confirmPassword: z.string().min(8).max(128),
+}).refine((d) => d.newPassword === d.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
+export const adminResetPasswordSchema = z.object({
+  userId: z.string().min(1),
+  newPassword: z.string().min(8).max(128),
+  confirmPassword: z.string().min(8).max(128).optional(),
+}).refine((d) => !d.confirmPassword || d.newPassword === d.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
 export const signupSchema = z.object({
   fullName: z.string().min(1).max(100).trim(),
   email: z.string().email().max(255),
