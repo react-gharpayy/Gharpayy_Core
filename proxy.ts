@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 const PUBLIC = ['/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/zones'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Only apply auth checks to API routes
