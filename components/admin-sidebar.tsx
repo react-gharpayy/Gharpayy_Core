@@ -74,7 +74,7 @@ export default function AdminSidebar() {
       <aside className="hidden md:flex flex-col w-64 min-h-screen fixed left-0 top-0 z-40 bg-white border-r border-gray-200">
         <div className="px-5 py-5 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-orange-500">A</div>
+            <img src="/logo.png" alt="Gharpayy" className="w-18 h-18 rounded-xl object-cover" />
             <div>
               <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
               <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
@@ -141,7 +141,7 @@ export default function AdminSidebar() {
           >
             <Menu className="w-4 h-4" />
           </button>
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold bg-orange-500">A</div>
+          <img src="/logo.png" alt="Gharpayy" className="w-7 h-7 rounded-lg object-cover" />
           <div className="text-sm font-semibold text-gray-900">Gharpayy - ARENA OS</div>
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function AdminSidebar() {
           <aside className="absolute left-0 top-0 h-full w-72 bg-white border-r border-gray-200 flex flex-col">
             <div className="px-4 py-4 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold bg-orange-500">A</div>
+                <img src="/logo.png" alt="Gharpayy" className="w-8 h-8 rounded-lg object-cover" />
                 <div className="text-sm font-semibold text-gray-900">Gharpayy - ARENA OS</div>
               </div>
               <button

@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC = ['/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/zones'];
+const PUBLIC = [
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/api/auth/login',
+  '/api/auth/signup',
+  '/api/auth/request-password-change',
+  '/api/zones',
+  '/api/test',
+  '/api/seed',
+];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
