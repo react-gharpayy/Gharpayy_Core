@@ -8,18 +8,13 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/constants';
 import { taskSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
 import { getISTDateStr } from '@/lib/attendance-utils';
+import { isSubAdmin, canAccessEmployee } from '@/lib/role-guards';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildSummary(tasks: any[]) {
   const summary: Record<string, number> = {
-    total: tasks.length,
-    todo: 0,
-    in_progress: 0,
-    blocked: 0,
-    pending_review: 0,
-    completed: 0,
-    overdue: 0,
-    cancelled: 0,
+    total: tasks.length, todo: 0, in_progress: 0, blocked: 0, pending_review: 0,
+    completed: 0, overdue: 0, cancelled: 0,
   };
   for (const t of tasks) summary[t.status] = (summary[t.status] || 0) + 1;
   return summary;
@@ -28,23 +23,14 @@ function buildSummary(tasks: any[]) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeTask(task: any) {
   return {
-    _id: task._id.toString(),
-    title: task.title,
-    description: task.description || '',
+    _id: task._id.toString(), title: task.title, description: task.description || '',
     assignedTo: task.assignedTo?.toString?.() || task.assignedTo,
-    assignedToName: task.assignedToName || '',
-    assignedBy: task.assignedBy || '',
-    assignedByName: task.assignedByName || '',
-    dueDate: task.dueDate || null,
-    priority: task.priority || 'medium',
-    status: task.status || 'todo',
-    teamId: task.teamId || null,
-    teamName: task.teamName || '',
-    completionNote: task.completionNote || '',
-    completionPhoto: task.completionPhoto || null,
-    completedAt: task.completedAt || null,
-    createdAt: task.createdAt,
-    updatedAt: task.updatedAt,
+    assignedToName: task.assignedToName || '', assignedBy: task.assignedBy || '',
+    assignedByName: task.assignedByName || '', dueDate: task.dueDate || null,
+    priority: task.priority || 'medium', status: task.status || 'todo',
+    teamId: task.teamId || null, teamName: task.teamName || '',
+    completionNote: task.completionNote || '', completionPhoto: task.completionPhoto || null,
+    completedAt: task.completedAt || null, createdAt: task.createdAt, updatedAt: task.updatedAt,
   };
 }
 
@@ -63,24 +49,27 @@ export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
     await connectDB();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const query: any = {};
-    if (user.role === 'employee') query.assignedTo = user.id;
+    if (user.role === 'employee') {
+      query.assignedTo = user.id;
+    } else if (isSubAdmin(user) && user.assignedTeamId) {
+      // sub_admin sees only tasks for their team
+      query.teamId = user.assignedTeamId;
+    }
 
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const page  = Math.max(1, parseInt(searchParams.get('page')  || '1'));
     const limit = Math.min(parseInt(searchParams.get('limit') || String(DEFAULT_PAGE_LIMIT)), MAX_PAGE_LIMIT);
-    const skip = (page - 1) * limit;
+    const skip  = (page - 1) * limit;
 
     const [docs, total] = await Promise.all([
       Task.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
       Task.countDocuments(query),
     ]);
-
     await refreshOverdue(docs);
-
     const tasks = docs.map(normalizeTask);
     return NextResponse.json({ ok: true, tasks, summary: buildSummary(tasks), total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (e: unknown) {
@@ -92,8 +81,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
-      return NextResponse.json({ error: 'Admin/Manager only' }, { status: 403 });
+    // sub_admin can create tasks (for their team only)
+    if (!user || !['admin', 'manager', 'sub_admin'].includes(user.role)) {
+      return NextResponse.json({ error: 'Admin/Manager/SubAdmin only' }, { status: 403 });
     }
 
     const body = await req.json();
@@ -101,9 +91,7 @@ export async function POST(req: NextRequest) {
     try {
       parsed = taskSchema.parse(body);
     } catch (e) {
-      if (e instanceof ZodError) {
-        return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
-      }
+      if (e instanceof ZodError) return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
       throw e;
     }
 
@@ -116,20 +104,22 @@ export async function POST(req: NextRequest) {
     const assignee = await User.findById(assignedTo).populate('officeZoneId', 'name').lean() as any;
     if (!assignee) return NextResponse.json({ error: 'Assignee not found' }, { status: 404 });
 
+    // sub_admin: enforce that assignee belongs to their team
+    if (isSubAdmin(user)) {
+      const zoneId = assignee.officeZoneId?._id?.toString() || assignee.officeZoneId?.toString();
+      if (!canAccessEmployee(user, zoneId)) {
+        return NextResponse.json({ error: 'Cannot assign task to employee outside your team' }, { status: 403 });
+      }
+    }
+
     const task = await Task.create({
-      title: String(title).trim(),
-      description: description || '',
-      assignedTo,
-      assignedToName: assignedToName || assignee.fullName || assignee.email,
-      assignedBy: user.id,
-      assignedByName: user.fullName || user.email || 'Manager',
-      dueDate: dueDate || null,
-      priority: priority || 'medium',
-      status: 'todo',
-      teamId: teamId || assignee.officeZoneId?._id?.toString?.() || null,
+      title: String(title).trim(), description: description || '',
+      assignedTo, assignedToName: assignedToName || assignee.fullName || assignee.email,
+      assignedBy: user.id, assignedByName: user.fullName || user.email || 'Manager',
+      dueDate: dueDate || null, priority: priority || 'medium', status: 'todo',
+      teamId:   teamId   || assignee.officeZoneId?._id?.toString?.() || null,
       teamName: teamName || assignee.officeZoneId?.name || '',
     });
-
     return NextResponse.json({ ok: true, task: normalizeTask(task) });
   } catch (e: unknown) {
     console.error('API error:', e);
@@ -152,16 +142,23 @@ export async function PATCH(req: NextRequest) {
     const task = await Task.findById(taskId);
     if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
 
+    // employee: can only update their own tasks (unchanged)
     if (user.role === 'employee' && task.assignedTo.toString() !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // sub_admin: can only update tasks in their team
+    if (isSubAdmin(user) && user.assignedTeamId) {
+      if (task.teamId && task.teamId.toString() !== user.assignedTeamId) {
+        return NextResponse.json({ error: 'Cannot update task outside your team' }, { status: 403 });
+      }
+    }
+
     if (status) task.status = status;
-    if (completionNote !== undefined) task.completionNote = completionNote;
+    if (completionNote  !== undefined) task.completionNote  = completionNote;
     if (completionPhoto !== undefined) task.completionPhoto = completionPhoto;
     if (status === 'completed' && !task.completedAt) task.completedAt = new Date();
     if (status && status !== 'completed') task.completedAt = null;
-
     await task.save();
     return NextResponse.json({ ok: true, task: normalizeTask(task) });
   } catch (e: unknown) {
