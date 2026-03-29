@@ -8,6 +8,31 @@ export interface AuthPayload {
   assignedTeamId?: string;
 }
 
+export interface LeaveBalance {
+  employeeId: string;
+  paid: number;
+  sick: number;
+  casual: number;
+  compOff: number;
+  lop: number;
+  encashable: number;
+  encashed: number;
+  ratePerDay?: number;
+}
+
+export interface LeaveRecord {
+  _id: string;
+  employeeId: string;
+  employeeName: string;
+  type: 'Paid' | 'Sick' | 'Casual' | 'Comp Off' | 'LOP';
+  startDate: string;
+  endDate: string;
+  days: number;
+  status: 'pending' | 'approved' | 'rejected';
+  reason?: string;
+  appliedAt?: string;
+}
+
 export interface AttendanceRecord {
   _id: string;
   employeeId: string;

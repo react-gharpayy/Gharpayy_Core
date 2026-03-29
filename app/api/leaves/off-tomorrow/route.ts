@@ -4,6 +4,8 @@ import { getAuthUser } from '@/lib/auth';
 import User from '@/models/User';
 import mongoose from 'mongoose';
 import { IST_OFFSET_MS } from '@/lib/constants';
+import Leave from '@/models/Leave';
+import { ensureLeaveBalance, getPolicyForUser, getHolidaysInRange, calculateLeaveDays } from '@/lib/leave-utils';
 
 function getISTDate(offsetDays = 0) {
   const d = new Date(Date.now() + IST_OFFSET_MS);
@@ -36,6 +38,44 @@ export async function POST() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       user.leaves = leaves as any;
       await user.save();
+    }
+
+    await connectDB();
+    const policy = await getPolicyForUser(auth.id);
+    const holidays = await getHolidaysInRange(tomorrow, tomorrow);
+    const weekOffs = Array.isArray(user.workSchedule?.weekOffs) && user.workSchedule.weekOffs.length > 0
+      ? user.workSchedule.weekOffs
+      : Array.isArray(policy?.weekOffs) ? policy.weekOffs : [];
+
+    const days = calculateLeaveDays({
+      startDate: tomorrow,
+      endDate: tomorrow,
+      weekOffs,
+      holidays: holidays.map(h => h.date),
+      holidayExclusionEnabled: policy?.holidayExclusionEnabled !== false,
+      weeklyOffExclusionEnabled: policy?.weeklyOffExclusionEnabled !== false,
+    });
+
+    const existingLeave = await Leave.findOne({ employeeId: auth.id, startDate: tomorrow, endDate: tomorrow, type: 'Casual' });
+    if (!existingLeave) {
+      const balance = await ensureLeaveBalance(auth.id);
+      await Leave.create({
+        employeeId: auth.id,
+        employeeName: user.fullName || auth.fullName || auth.email,
+        type: 'Casual',
+        startDate: tomorrow,
+        endDate: tomorrow,
+        days: days || 1,
+        status: 'approved',
+        reason: 'Off tomorrow',
+        approvedAt: new Date(),
+        approvedBy: auth.id,
+        approvedByName: auth.fullName || auth.email,
+      });
+      if (Number(balance.casual || 0) >= (days || 1)) {
+        balance.casual = Math.max(0, Number(balance.casual || 0) - (days || 1));
+        await balance.save();
+      }
     }
 
     return NextResponse.json({ ok: true, leave: { date: tomorrow, type: 'day_off', status: 'approved' } });

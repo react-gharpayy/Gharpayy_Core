@@ -160,7 +160,7 @@ export async function PATCH(req: NextRequest) {
 
     // manager: can only update tasks in their team
     if (user.role === 'manager') {
-      const teamEmployees = await User.find({ managerId: user.id, role: 'employee' }, '_id').lean();
+      const teamEmployees = await User.find({ managerId: user.id, role: 'employee' }, '_id').lean() as { _id: { toString: () => string } }[];
       const teamIds = teamEmployees.map(e => e._id.toString());
       if (!teamIds.includes(task.assignedTo.toString())) {
         return NextResponse.json({ error: 'Cannot update task outside your team' }, { status: 403 });

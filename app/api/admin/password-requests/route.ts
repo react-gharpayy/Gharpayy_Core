@@ -20,7 +20,7 @@ export async function GET() {
     const uMap = new Map(users.map(u => [u._id.toString(), u]));
 
     if (auth.role === 'manager') {
-      const teamEmployees = await User.find({ managerId: auth.id, role: 'employee' }, '_id').lean();
+      const teamEmployees = await User.find({ managerId: auth.id, role: 'employee' }, '_id').lean() as { _id: { toString: () => string } }[];
       const teamIds = new Set(teamEmployees.map(e => e._id.toString()));
       rows = rows.filter(r => teamIds.has(r.userId.toString()));
     }

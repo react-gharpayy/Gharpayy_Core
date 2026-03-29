@@ -5,6 +5,7 @@ import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr, recomputeAttendanceTotals } from '@/lib/attendance-utils';
 import { notifyDailySummary } from '@/lib/system-notifications';
+import { maybeCreditCompOff } from '@/lib/comp-off';
 
 export async function POST(req: NextRequest) {
   try {
@@ -79,6 +80,9 @@ export async function POST(req: NextRequest) {
         lateByMins: Number(att.lateByMins || 0),
         earlyByMins: Number(att.earlyByMins || 0),
       });
+      try {
+        await maybeCreditCompOff(user.id, date, String(att._id), Number(att.totalWorkMins || 0));
+      } catch {}
     }
 
     return NextResponse.json({

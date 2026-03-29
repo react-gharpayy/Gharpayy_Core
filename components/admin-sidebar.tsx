@@ -3,7 +3,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, BarChart2, ClipboardList,
-  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound
+  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound, Calendar
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -18,6 +18,8 @@ const NAV_ITEMS = [
   { label: 'Employee Management', href: '/admin', icon: Users },
   { label: 'Settings', href: '/settings', icon: Settings },
   { label: 'Shift Settings', href: '/shift-settings', icon: Settings },
+  { label: 'Attendance Policy', href: '/attendance-policy', icon: Settings },
+  { label: 'Holiday Calendar', href: '/holidays', icon: Calendar },
   { label: 'Employee Profile', href: '/employee-profile', icon: UserRound },
 ];
 

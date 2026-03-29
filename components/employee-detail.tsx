@@ -46,6 +46,8 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
   const [msg, setMsg] = useState('');
   const [resetPwd, setResetPwd] = useState({ newPassword: '', confirmPassword: '' });
   const [resetting, setResetting] = useState(false);
+  const [leaveBalance, setLeaveBalance] = useState<any>(null);
+  const [leaveSaving, setLeaveSaving] = useState(false);
 
   const fetchStatus = (empId?: string) => {
     const url = userRole === 'admin' || userRole === 'manager'
@@ -74,6 +76,12 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
           setSelectedEmployee(first);
           setLoading(true);
           fetchStatus(first);
+          if (me.role === 'admin' && first) {
+            fetch(`/api/leaves/balance?employeeId=${first}`, { cache: 'no-store' })
+              .then(r => r.json())
+              .then(d => { if (d.balance) setLeaveBalance(d.balance); })
+              .catch(() => {});
+          }
         } else {
           setLoading(true);
           fetchStatus();
@@ -146,6 +154,38 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
     setResetting(false);
   };
 
+  const saveLeaveBalance = async () => {
+    if (userRole !== 'admin' || !selectedEmployee) return;
+    setLeaveSaving(true);
+    try {
+      const r = await fetch('/api/leaves/balance', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: selectedEmployee,
+          paid: leaveBalance?.paid,
+          sick: leaveBalance?.sick,
+          casual: leaveBalance?.casual,
+          compOff: leaveBalance?.compOff,
+          lop: leaveBalance?.lop,
+          encashable: leaveBalance?.encashable,
+          encashed: leaveBalance?.encashed,
+          ratePerDay: leaveBalance?.ratePerDay,
+        }),
+      });
+      const d = await r.json();
+      if (d.balance) {
+        setLeaveBalance(d.balance);
+        flash('Leave balance updated');
+      } else {
+        flash(d.error || 'Failed to update balance');
+      }
+    } catch {
+      flash('Failed to update balance');
+    }
+    setLeaveSaving(false);
+  };
+
   return (
     <div className="bg-white rounded-3xl border border-gray-300 p-6 md:p-8">
       <div className="flex items-center justify-between mb-6">
@@ -159,7 +199,18 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
         <div className="mb-4">
           <select
             value={selectedEmployee}
-            onChange={(e) => { setSelectedEmployee(e.target.value); setLoading(true); fetchStatus(e.target.value); }}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSelectedEmployee(next);
+              setLoading(true);
+              fetchStatus(next);
+              if (userRole === 'admin') {
+                fetch(`/api/leaves/balance?employeeId=${next}`, { cache: 'no-store' })
+                  .then(r => r.json())
+                  .then(d => { if (d.balance) setLeaveBalance(d.balance); })
+                  .catch(() => {});
+              }
+            }}
             className="px-3 py-2 rounded-xl text-sm focus:outline-none"
             style={{ background: '#ffffff', border: '1px solid #e5e7eb', color: '#374151' }}
           >
@@ -197,6 +248,43 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
             </button>
           </div>
           <div className="text-[10px] text-gray-600 mt-2">Admin can reset password without approval.</div>
+        </div>
+      )}
+
+      {userRole === 'admin' && selectedEmployee && leaveBalance && (
+        <div className="mb-4 p-4 rounded-2xl" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+          <div className="text-sm font-semibold text-gray-900 mb-2">Leave Balance & Encashment</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {[
+              { key: 'paid', label: 'Paid' },
+              { key: 'sick', label: 'Sick' },
+              { key: 'casual', label: 'Casual' },
+              { key: 'compOff', label: 'Comp Off' },
+              { key: 'lop', label: 'LOP' },
+              { key: 'encashable', label: 'Encashable' },
+              { key: 'encashed', label: 'Encashed' },
+              { key: 'ratePerDay', label: 'Rate/Day' },
+            ].map(field => (
+              <div key={field.key}>
+                <label className="block text-[10px] text-gray-600 mb-1">{field.label}</label>
+                <input
+                  type="number"
+                  value={Number(leaveBalance[field.key] || 0)}
+                  onChange={(e) => setLeaveBalance((p: any) => ({ ...p, [field.key]: Number(e.target.value) }))}
+                  className="w-full px-2 py-2 rounded-lg text-xs focus:outline-none"
+                  style={{ background: '#ffffff', border: '1px solid #e5e7eb', color: '#374151' }}
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={saveLeaveBalance}
+            disabled={leaveSaving}
+            className="mt-3 px-3 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-60"
+            style={{ background: '#f97316' }}
+          >
+            {leaveSaving ? 'Saving...' : 'Save Leave Balance'}
+          </button>
         </div>
       )}
 

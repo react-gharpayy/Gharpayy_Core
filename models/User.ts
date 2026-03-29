@@ -17,9 +17,13 @@ export interface IUser extends Document {
   teamName?: string;
   department?: string;
   workSchedule?: {
+    shiftType?: 'FT_MAIN' | 'FT_EARLY' | 'INTERN_DAY' | 'CUSTOM';
     startTime: string;
     endTime: string;
     breakDuration: number;
+    breaks?: { name: string; start: string; end: string; durationMinutes: number }[];
+    weekOffs?: string[];
+    isCustomShift?: boolean;
     isLocked: boolean;
     setBy: 'employee' | 'admin';
   };
@@ -32,10 +36,21 @@ export interface IUser extends Document {
   updatedAt: Date;
 }
 
+const WorkBreakSchema = new Schema({
+  name:            { type: String, default: '' },
+  start:           { type: String, default: '' },
+  end:             { type: String, default: '' },
+  durationMinutes: { type: Number, default: 0 },
+}, { _id: false });
+
 const WorkScheduleSchema = new Schema({
+  shiftType:     { type: String, enum: ['FT_MAIN', 'FT_EARLY', 'INTERN_DAY', 'CUSTOM'], default: 'CUSTOM' },
   startTime:     { type: String, default: '' },
   endTime:       { type: String, default: '' },
   breakDuration: { type: Number, default: 0 },
+  breaks:        { type: [WorkBreakSchema], default: [] },
+  weekOffs:      { type: [String], default: [] },
+  isCustomShift: { type: Boolean, default: false },
   isLocked:      { type: Boolean, default: false },
   setBy:         { type: String, enum: ['employee', 'admin'], default: 'employee' },
 }, { _id: false });

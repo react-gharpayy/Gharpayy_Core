@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Clock, AlertTriangle, MapPin, User } from 'lucide-react';
+import { SHIFT_TEMPLATES, SHIFT_TYPE_LABELS, WEEK_DAYS, ShiftType, BreakItem } from '@/lib/shift-templates';
 
 interface Exception {
   _id: string; employeeName: string; type: string;
@@ -9,6 +10,14 @@ interface Exception {
   source?: 'exception' | 'employee';
   employeeId?: string;
 }
+
+type ScheduleDraft = {
+  shiftType: ShiftType;
+  startTime: string;
+  endTime: string;
+  breaks: BreakItem[];
+  weekOffs: string[];
+};
 
 const TYPE_LABEL: Record<string, { label: string; color: string; bg: string }> = {
   missed_punch:  { label: 'Missed Punch',  color: '#f59e0b', bg: 'rgba(245,158,11,0.12)'  },
@@ -40,6 +49,33 @@ export default function Approvals() {
   const [pwdRequests, setPwdRequests] = useState<any[]>([]);
   const [pwdActing, setPwdActing] = useState<string | null>(null);
   const [userRole, setUserRole] = useState('');
+  const [scheduleMap, setScheduleMap] = useState<Record<string, ScheduleDraft>>({});
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [leaveActing, setLeaveActing] = useState<string | null>(null);
+
+  const templateToDraft = (shiftType: ShiftType): ScheduleDraft => {
+    if (shiftType !== 'CUSTOM') {
+      const t = SHIFT_TEMPLATES[shiftType];
+      return { shiftType, startTime: t.workStart, endTime: t.workEnd, breaks: t.breaks, weekOffs: t.weekOffs };
+    }
+    return { shiftType: 'CUSTOM', startTime: '10:00', endTime: '19:00', breaks: [], weekOffs: SHIFT_TEMPLATES.FT_MAIN.weekOffs };
+  };
+
+  const ensureDraft = (employeeId?: string) => {
+    if (!employeeId) return templateToDraft('FT_MAIN');
+    const existing = scheduleMap[employeeId];
+    if (existing) return existing;
+    const next = templateToDraft('FT_MAIN');
+    setScheduleMap(p => ({ ...p, [employeeId]: next }));
+    return next;
+  };
+
+  const updateDraft = (employeeId: string, patch: Partial<ScheduleDraft>) => {
+    setScheduleMap(p => ({
+      ...p,
+      [employeeId]: { ...ensureDraft(employeeId), ...patch },
+    }));
+  };
 
   const fetchData = (status = tab, role = userRole) => {
     setLoading(true);
@@ -50,9 +86,10 @@ export default function Approvals() {
         : fetch(`/api/employees/approvals?status=${status}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({}));
 
     const pwdReq = fetch('/api/admin/password-requests', { cache: 'no-store' }).then(r => r.json()).catch(() => ({}));
+    const leaveReq = fetch('/api/leaves/pending', { cache: 'no-store' }).then(r => r.json()).catch(() => ({}));
 
-    Promise.all([exceptionReq, employeeReq, pwdReq])
-      .then(([exData, empData, pwdData]) => {
+    Promise.all([exceptionReq, employeeReq, pwdReq, leaveReq])
+      .then(([exData, empData, pwdData, leaveData]) => {
         const exceptionRows: Exception[] = Array.isArray(exData?.exceptions)
           ? exData.exceptions.map((e: any) => ({ ...e, source: 'exception' as const }))
           : [];
@@ -77,6 +114,7 @@ export default function Approvals() {
         );
         setExceptions(merged);
         if (Array.isArray(pwdData?.requests)) setPwdRequests(pwdData.requests);
+        if (Array.isArray(leaveData?.leaves)) setLeaveRequests(leaveData.leaves);
 
         if (status === 'pending') {
           const exPending = Number(exData?.pendingCount || 0);
@@ -106,10 +144,11 @@ export default function Approvals() {
       if (id.startsWith('emp-')) {
         const employeeId = id.replace('emp-', '');
         const action = status === 'approved' ? 'approve' : 'reject';
+        const schedule = scheduleMap[employeeId] || templateToDraft('FT_MAIN');
         await fetch('/api/employees/approvals', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employeeId, action }),
+          body: JSON.stringify({ employeeId, action, schedule }),
         });
       } else {
         await fetch('/api/exceptions', {
@@ -144,6 +183,16 @@ export default function Approvals() {
       fetchData(tab);
     } catch {}
     setPwdActing(null);
+  };
+
+  const actLeave = async (id: string, action: 'approve' | 'reject') => {
+    setLeaveActing(id);
+    try {
+      const route = action === 'approve' ? 'approve' : 'reject';
+      await fetch(`/api/leaves/${id}/${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: '' }) });
+      fetchData(tab);
+    } catch {}
+    setLeaveActing(null);
   };
 
   const card = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 20, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' };
@@ -221,6 +270,9 @@ export default function Approvals() {
           <div className="divide-y" style={{ borderColor: '#f9fafb' }}>
             {exceptions.map(exc => {
               const tc = TYPE_LABEL[exc.type] || { label: exc.type, color: '#f97316', bg: 'rgba(249,115,22,0.12)' };
+              const isAccount = exc.type === 'account_approval';
+              const schedule = isAccount ? ensureDraft(exc.employeeId) : null;
+              const isCustom = schedule?.shiftType === 'CUSTOM';
               return (
                 <div key={exc._id} className="p-4">
                   <div className="flex items-start gap-3">
@@ -240,6 +292,154 @@ export default function Approvals() {
                         <span>{exc.date}</span>
                         {exc.requestedTime && <span>Requested: {exc.requestedTime}</span>}
                       </div>
+
+                      {isAccount && exc.status === 'pending' && schedule && (
+                        <div className="mt-3 p-3 rounded-xl" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                          <div className="text-[11px] font-semibold text-gray-900 mb-2">Shift Assignment</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] text-gray-600 mb-1">Shift Type</label>
+                              <select
+                                value={schedule.shiftType}
+                                onChange={(e) => {
+                                  const next = e.target.value as ShiftType;
+                                  const draft = templateToDraft(next);
+                                  updateDraft(exc.employeeId || '', draft);
+                                }}
+                                className="w-full px-2 py-1.5 rounded-lg text-xs focus:outline-none"
+                                style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151' }}
+                              >
+                                {Object.entries(SHIFT_TYPE_LABELS).map(([key, label]) => (
+                                  <option key={key} value={key}>{label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-600 mb-1">Work Start</label>
+                              <input
+                                type="time"
+                                value={schedule.startTime}
+                                disabled={!isCustom}
+                                onChange={(e) => updateDraft(exc.employeeId || '', { startTime: e.target.value })}
+                                className="w-full px-2 py-1.5 rounded-lg text-xs focus:outline-none disabled:opacity-60"
+                                style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151' }}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-600 mb-1">Work End</label>
+                              <input
+                                type="time"
+                                value={schedule.endTime}
+                                disabled={!isCustom}
+                                onChange={(e) => updateDraft(exc.employeeId || '', { endTime: e.target.value })}
+                                className="w-full px-2 py-1.5 rounded-lg text-xs focus:outline-none disabled:opacity-60"
+                                style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151' }}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-600 mb-1">Week Off</label>
+                              <div className="text-[10px] text-gray-700 px-2 py-1.5 rounded-lg" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+                                {schedule.weekOffs?.length ? schedule.weekOffs.join(', ') : 'None'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            <div className="text-[10px] text-gray-600 mb-1">Break Schedule</div>
+                            <div className="space-y-2">
+                              {schedule.breaks.map((b, idx) => (
+                                <div key={`${b.name}-${idx}`} className="grid grid-cols-4 gap-2">
+                                  <input
+                                    type="text"
+                                    value={b.name}
+                                    disabled={!isCustom}
+                                    onChange={(e) => {
+                                      const next = [...schedule.breaks];
+                                      next[idx] = { ...next[idx], name: e.target.value };
+                                      updateDraft(exc.employeeId || '', { breaks: next });
+                                    }}
+                                    placeholder="Name"
+                                    className="px-2 py-1.5 rounded-lg text-xs focus:outline-none disabled:opacity-60"
+                                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151' }}
+                                  />
+                                  <input
+                                    type="time"
+                                    value={b.start}
+                                    disabled={!isCustom}
+                                    onChange={(e) => {
+                                      const next = [...schedule.breaks];
+                                      next[idx] = { ...next[idx], start: e.target.value };
+                                      updateDraft(exc.employeeId || '', { breaks: next });
+                                    }}
+                                    className="px-2 py-1.5 rounded-lg text-xs focus:outline-none disabled:opacity-60"
+                                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151' }}
+                                  />
+                                  <input
+                                    type="time"
+                                    value={b.end}
+                                    disabled={!isCustom}
+                                    onChange={(e) => {
+                                      const next = [...schedule.breaks];
+                                      next[idx] = { ...next[idx], end: e.target.value };
+                                      updateDraft(exc.employeeId || '', { breaks: next });
+                                    }}
+                                    className="px-2 py-1.5 rounded-lg text-xs focus:outline-none disabled:opacity-60"
+                                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151' }}
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={b.durationMinutes}
+                                    disabled={!isCustom}
+                                    onChange={(e) => {
+                                      const next = [...schedule.breaks];
+                                      next[idx] = { ...next[idx], durationMinutes: Number(e.target.value) };
+                                      updateDraft(exc.employeeId || '', { breaks: next });
+                                    }}
+                                    className="px-2 py-1.5 rounded-lg text-xs focus:outline-none disabled:opacity-60"
+                                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151' }}
+                                  />
+                                </div>
+                              ))}
+                              {isCustom && (
+                                <button
+                                  onClick={() => {
+                                    const next = [...schedule.breaks, { name: 'Break', start: '13:00', end: '13:15', durationMinutes: 15 }];
+                                    updateDraft(exc.employeeId || '', { breaks: next });
+                                  }}
+                                  className="text-[10px] font-semibold text-orange-600"
+                                >
+                                  + Add Break
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            <div className="text-[10px] text-gray-600 mb-1">Week Offs</div>
+                            <div className="flex flex-wrap gap-2">
+                              {WEEK_DAYS.map(day => {
+                                const checked = schedule.weekOffs.includes(day);
+                                return (
+                                  <label key={day} className="flex items-center gap-1 text-[10px] text-gray-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={(e) => {
+                                        const next = e.target.checked
+                                          ? [...schedule.weekOffs, day]
+                                          : schedule.weekOffs.filter(d => d !== day);
+                                        updateDraft(exc.employeeId || '', { weekOffs: next });
+                                      }}
+                                    />
+                                    {day.slice(0, 3)}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {exc.status === 'pending' && (
                         <div className="flex gap-2 mt-3">
@@ -302,6 +502,41 @@ export default function Approvals() {
                       </button>
                     </>
                   )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={card} className="p-5">
+        <h2 className="text-sm font-bold text-gray-900 mb-3">Leave Requests</h2>
+        {leaveRequests.length === 0 ? (
+          <div className="text-xs text-gray-700">No pending leave requests</div>
+        ) : (
+          <div className="space-y-2">
+            {leaveRequests.map((r: any) => (
+              <div key={r._id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{r.employeeName}</div>
+                  <div className="text-[11px]" style={{ color: '#6b7280' }}>{r.type} • {r.startDate} - {r.endDate} • {r.days} day(s)</div>
+                  {r.reason && <div className="text-[10px]" style={{ color: '#9ca3af' }}>{r.reason}</div>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg"
+                    style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+                    pending
+                  </span>
+                  <button onClick={() => actLeave(r._id, 'approve')} disabled={leaveActing === r._id}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                    style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                    Approve
+                  </button>
+                  <button onClick={() => actLeave(r._id, 'reject')} disabled={leaveActing === r._id}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                    style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    Reject
+                  </button>
                 </div>
               </div>
             ))}

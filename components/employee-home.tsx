@@ -1,7 +1,7 @@
 ﻿'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Clock, CheckCircle, XCircle, MapPin, Menu, X, Home, User, Bell } from 'lucide-react';
+import { LogOut, Clock, CheckCircle, XCircle, MapPin, Menu, X, Home, User, Bell, Calendar } from 'lucide-react';
 import EmployeeNav from '@/components/employee-nav';
 import NoticesEmployee from '@/components/notices-employee';
 
@@ -10,6 +10,7 @@ interface User { id: string; email: string; fullName: string; role: string; }
 const MOBILE_TABS = [
   { label: 'Home',          href: '/home',    icon: Home  },
   { label: 'My Attendance', href: '/clock',   icon: Clock },
+  { label: 'My Leaves',     href: '/my-leaves', icon: Calendar },
   { label: 'My Profile',    href: '/profile', icon: User  },
   { label: 'Notices',       href: '/notices', icon: Bell  },
 ];
@@ -39,6 +40,8 @@ export default function EmployeeHome({ user }: { user: User }) {
   const [clocking, setClocking] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [leaveBalance, setLeaveBalance] = useState<any>(null);
+  const [teamLeaves, setTeamLeaves] = useState<any[]>([]);
 
   const fetchStatus = () => {
     setLoading(true);
@@ -55,6 +58,18 @@ export default function EmployeeHome({ user }: { user: User }) {
     fetch('/api/auth/me', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { if (d.profilePhoto) setProfilePhoto(d.profilePhoto); })
+      .catch(() => {});
+
+    fetch('/api/leaves/balance', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (d.balance) setLeaveBalance(d.balance); })
+      .catch(() => {});
+
+    const todayStr = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const to = new Date(Date.now() + 5.5 * 60 * 60 * 1000 + 6 * 86400000).toISOString().split('T')[0];
+    fetch(`/api/leaves/team?from=${todayStr}&to=${to}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.leaves)) setTeamLeaves(d.leaves); })
       .catch(() => {});
   }, []);
 
@@ -330,6 +345,52 @@ export default function EmployeeHome({ user }: { user: User }) {
 
         {/* Notices */}
         <NoticesEmployee />
+
+        {/* Leave Balance */}
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-900">Leave Balance</h3>
+            <button onClick={() => router.push('/my-leaves')} className="text-xs text-orange-600 font-semibold">View</button>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              { label: 'Paid', value: leaveBalance?.paid ?? 0 },
+              { label: 'Sick', value: leaveBalance?.sick ?? 0 },
+              { label: 'Casual', value: leaveBalance?.casual ?? 0 },
+              { label: 'Comp Off', value: leaveBalance?.compOff ?? 0 },
+              { label: 'LOP', value: leaveBalance?.lop ?? 0 },
+              { label: 'Encashable', value: leaveBalance?.encashable ?? 0 },
+            ].map(b => (
+              <div key={b.label} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <div className="text-lg font-bold text-gray-800">{b.value}</div>
+                <div className="text-[10px] text-gray-500">{b.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Team Leave Calendar */}
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-900">Team Leaves</h3>
+            <span className="text-[10px] text-gray-500">Today & Upcoming</span>
+          </div>
+          {teamLeaves.length === 0 ? (
+            <div className="text-xs text-gray-600">No team leaves in the next 7 days.</div>
+          ) : (
+            <div className="space-y-2">
+              {teamLeaves.slice(0, 6).map((l: any) => (
+                <div key={l._id} className="flex items-center justify-between p-2 rounded-xl bg-gray-50 border border-gray-100">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{l.employeeName}</div>
+                    <div className="text-[10px] text-gray-500">{l.type} • {l.startDate} - {l.endDate}</div>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-orange-50 text-orange-600">{l.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>

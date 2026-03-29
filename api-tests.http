@@ -1,0 +1,47 @@
+### Apply Leave (employee)
+POST http://localhost:3005/api/leaves/apply
+Content-Type: application/json
+
+{
+  "type": "Casual",
+  "startDate": "2026-03-29",
+  "endDate": "2026-03-30",
+  "reason": "Personal work"
+}
+
+### Get My Leaves
+GET http://localhost:3005/api/leaves/my
+
+### Get Leave Balance
+GET http://localhost:3005/api/leaves/balance
+
+### Get Pending Leaves (admin/manager)
+GET http://localhost:3005/api/leaves/pending
+
+### Approve Leave (admin/manager)
+POST http://localhost:3005/api/leaves/LEAVE_ID/approve
+Content-Type: application/json
+
+{}
+
+### Reject Leave (admin/manager)
+POST http://localhost:3005/api/leaves/LEAVE_ID/reject
+Content-Type: application/json
+
+{
+  "reason": "Insufficient balance"
+}
+
+### Holidays list
+GET http://localhost:3005/api/holidays
+
+### Create Holiday (admin)
+POST http://localhost:3005/api/holidays
+Content-Type: application/json
+
+{
+  "name": "Holi",
+  "date": "2026-03-30",
+  "type": "public",
+  "description": "Festival of colors"
+}

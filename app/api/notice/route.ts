@@ -20,7 +20,7 @@ export async function GET() {
     let notices;
     if (isManager) {
       if (user.role === 'manager') {
-        const teamEmployees = await User.find({ managerId: user.id, role: 'employee' }, '_id').lean();
+        const teamEmployees = await User.find({ managerId: user.id, role: 'employee' }, '_id').lean() as { _id: { toString: () => string } }[];
         const teamIds = teamEmployees.map(e => e._id.toString());
         notices = await Notice.find({
           $or: [

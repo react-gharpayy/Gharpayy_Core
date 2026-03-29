@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import User from '@/models/User';
 import mongoose from 'mongoose';
+import { SHIFT_TEMPLATES, ShiftType, WEEK_DAYS } from '@/lib/shift-templates';
 
 function isValidTime(v: unknown) {
   return typeof v === 'string' && /^\d{2}:\d{2}$/.test(v);
@@ -45,10 +46,44 @@ export async function PATCH(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { startTime, endTime, breakDuration, userId } = body || {};
-    const duration = Number(breakDuration);
-    if (!isValidTime(startTime) || !isValidTime(endTime) || !Number.isFinite(duration) || duration < 0 || duration > 240) {
+    const { shiftType, startTime, endTime, breaks, weekOffs, userId } = body || {};
+    const type = (shiftType || 'CUSTOM') as ShiftType;
+    const isCustom = type === 'CUSTOM';
+    const isKnown = type === 'CUSTOM' || type === 'FT_MAIN' || type === 'FT_EARLY' || type === 'INTERN_DAY';
+    if (!isKnown) return NextResponse.json({ error: 'Invalid shiftType' }, { status: 400 });
+
+    let finalStart = '';
+    let finalEnd = '';
+    let finalBreaks: { name: string; start: string; end: string; durationMinutes: number }[] = [];
+    let finalWeekOffs: string[] = [];
+
+    if (!isCustom) {
+      const tmpl = SHIFT_TEMPLATES[type as Exclude<ShiftType, 'CUSTOM'>];
+      finalStart = tmpl.workStart;
+      finalEnd = tmpl.workEnd;
+      finalBreaks = tmpl.breaks;
+      finalWeekOffs = tmpl.weekOffs;
+    } else {
+      finalStart = startTime || '';
+      finalEnd = endTime || '';
+      finalBreaks = Array.isArray(breaks) ? breaks : [];
+      finalWeekOffs = Array.isArray(weekOffs) ? weekOffs : [];
+    }
+
+    if (Array.isArray(weekOffs)) {
+      finalWeekOffs = weekOffs;
+    }
+
+    if (!isValidTime(finalStart) || !isValidTime(finalEnd)) {
       return NextResponse.json({ error: 'Invalid schedule payload' }, { status: 400 });
+    }
+    for (const b of finalBreaks) {
+      if (!b || !isValidTime(b.start) || !isValidTime(b.end) || !Number.isFinite(Number(b.durationMinutes))) {
+        return NextResponse.json({ error: 'Invalid break schedule' }, { status: 400 });
+      }
+    }
+    if (finalWeekOffs.length > 0 && finalWeekOffs.some((d: string) => !WEEK_DAYS.includes(d))) {
+      return NextResponse.json({ error: 'Invalid week off day' }, { status: 400 });
     }
 
     let targetId = auth.id;
@@ -69,10 +104,15 @@ export async function PATCH(req: NextRequest) {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const breakDuration = finalBreaks.reduce((sum, b) => sum + Number(b.durationMinutes || 0), 0);
     user.workSchedule = {
-      startTime,
-      endTime,
-      breakDuration: duration,
+      shiftType: type,
+      startTime: finalStart,
+      endTime: finalEnd,
+      breakDuration,
+      breaks: finalBreaks,
+      weekOffs: finalWeekOffs,
+      isCustomShift: isCustom,
       isLocked: true,
       setBy: isAdminActor ? 'admin' : 'employee',
     } as any;
