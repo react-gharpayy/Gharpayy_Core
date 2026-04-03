@@ -25,6 +25,8 @@ export async function getDefaultPolicy(orgId?: string) {
   const existing = await AttendancePolicy.findOne({ isDefault: true }).lean();
   if (existing) return existing;
   if (!orgId) return null;
+  const orgPolicy = await AttendancePolicy.findOne({ orgId }).lean();
+  if (orgPolicy) return orgPolicy;
   const created = await AttendancePolicy.create({ orgId });
   return created.toObject();
 }
@@ -76,11 +78,33 @@ export async function ensureLeaveBalance(employeeId: string, year?: number) {
   const targetYear = year ?? new Date().getFullYear();
   const existing = await LeaveBalance.findOne({ employeeId, year: targetYear });
   if (existing) return existing;
-  const created = await LeaveBalance.create({
-    employeeId,
-    year: targetYear,
-  });
-  return created;
+  try {
+    const created = await LeaveBalance.create({
+      employeeId,
+      year: targetYear,
+    });
+    return created;
+  } catch (err: any) {
+    if (err?.code === 11000) {
+      const fallback = await LeaveBalance.findOne({ employeeId });
+      if (fallback) {
+        const normalizeEntry = (val: any, defaultTotal: number) => {
+          if (val && typeof val === 'object' && 'total' in val) return val;
+          const total = typeof val === 'number' ? val : defaultTotal;
+          return { total, used: 0, pending: 0 };
+        };
+        // backfill year and normalize legacy shapes
+        (fallback as any).year = (fallback as any).year || targetYear;
+        (fallback as any).casual = normalizeEntry((fallback as any).casual, 12);
+        (fallback as any).sick = normalizeEntry((fallback as any).sick, 8);
+        (fallback as any).earned = normalizeEntry((fallback as any).earned, 15);
+        (fallback as any).comp_off = normalizeEntry((fallback as any).comp_off, 0);
+        await fallback.save();
+        return fallback;
+      }
+    }
+    throw err;
+  }
 }
 
 export function getISTToday() {

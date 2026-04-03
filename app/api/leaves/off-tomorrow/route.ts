@@ -34,7 +34,7 @@ export async function POST() {
       employeeId: auth.id,
       startDate: tomorrow,
       endDate: tomorrow,
-      leaveType: 'casual',
+      $or: [{ leaveType: 'casual' }, { type: 'Casual' }],
       reason: 'Off tomorrow',
       status: { $in: ['pending', 'approved'] },
     }).lean() as any;
@@ -113,7 +113,7 @@ export async function DELETE() {
       employeeId: auth.id,
       startDate: tomorrow,
       endDate: tomorrow,
-      leaveType: 'casual',
+      $or: [{ leaveType: 'casual' }, { type: 'Casual' }],
       reason: 'Off tomorrow',
       status: { $in: ['pending', 'approved'] },
     });
@@ -124,13 +124,14 @@ export async function DELETE() {
 
     {
       const balance = await ensureLeaveBalance(auth.id) as any;
-      const days = Number((offLeave as any).totalDays || 1);
+      const days = Number((offLeave as any).totalDays ?? (offLeave as any).days ?? 1);
+      const safeDays = Number.isFinite(days) && days > 0 ? days : 1;
       const entry = balance.casual || { total: 12, used: 0, pending: 0 };
       if (offLeave.status === 'pending') {
-        entry.pending = Math.max(0, Number(entry.pending || 0) - days);
+        entry.pending = Math.max(0, Number(entry.pending || 0) - safeDays);
       }
       if (offLeave.status === 'approved') {
-        entry.used = Math.max(0, Number(entry.used || 0) - days);
+        entry.used = Math.max(0, Number(entry.used || 0) - safeDays);
       }
       balance.casual = entry;
       await balance.save();

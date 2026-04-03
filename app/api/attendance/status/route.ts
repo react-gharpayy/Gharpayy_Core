@@ -89,7 +89,7 @@ export async function GET() {
       employeeId: user.id,
       startDate: tomorrow,
       endDate: tomorrow,
-      leaveType: 'casual',
+      $or: [{ leaveType: 'casual' }, { type: 'Casual' }],
       reason: 'Off tomorrow',
       status: { $in: ['pending', 'approved'] },
     }).lean() as any;
