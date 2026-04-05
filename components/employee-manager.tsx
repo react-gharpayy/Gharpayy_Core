@@ -20,6 +20,12 @@ interface CSVRow {
   email: string;
   password: string;
   role: string;
+  dateOfBirth?: string;
+  department?: string;
+  teamName?: string;
+  jobRole?: string;
+  officeZoneName?: string;
+  managerEmail?: string;
   status?: 'pending' | 'ok' | 'error';
   error?: string;
 }
@@ -183,16 +189,30 @@ export default function EmployeeManager() {
       const text = ev.target?.result as string;
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       const rows: CSVRow[] = [];
-      // Skip header row
-      const start = lines[0].toLowerCase().includes('name') ? 1 : 0;
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const hasHeader = header.some(h => h.includes('name') || h.includes('email'));
+      const start = hasHeader ? 1 : 0;
+      const idx = (name: string) => header.findIndex(h => h === name || h.replace(/\s+/g, '') === name.replace(/\s+/g, ''));
+
       for (let i = start; i < lines.length; i++) {
         const parts = lines[i].split(',').map(p => p.trim());
         if (parts.length < 3) continue;
+        const get = (key: string, fallbackIndex?: number) => {
+          const index = hasHeader ? idx(key) : (fallbackIndex ?? -1);
+          return index >= 0 ? (parts[index] || '') : '';
+        };
+
         rows.push({
-          fullName: parts[0] || '',
-          email: parts[1] || '',
-          password: parts[2] || 'Pass@1234',
-          role: userRole === 'manager' ? 'employee' : parts[3]?.toLowerCase() || 'employee',
+          fullName: get('full name', 0) || get('name', 0),
+          email: get('email', 1),
+          password: get('password', 2) || 'Pass@1234',
+          role: userRole === 'manager' ? 'employee' : (get('role', 3).toLowerCase() || 'employee'),
+          dateOfBirth: get('dob') || get('date of birth'),
+          department: get('department'),
+          teamName: get('team') || get('team name'),
+          jobRole: get('job role') || get('jobrole'),
+          officeZoneName: get('office zone') || get('zone') || get('officezonename'),
+          managerEmail: get('manager email') || get('manager'),
           status: 'pending',
         });
       }
@@ -217,6 +237,12 @@ export default function EmployeeManager() {
             email: updated[i].email.toLowerCase(),
             password: updated[i].password,
             role: userRole === 'manager' ? 'employee' : (ROLES.includes(updated[i].role) ? updated[i].role : 'employee'),
+            dateOfBirth: updated[i].dateOfBirth,
+            department: updated[i].department,
+            teamName: updated[i].teamName,
+            jobRole: updated[i].jobRole,
+            officeZoneName: updated[i].officeZoneName,
+            managerEmail: updated[i].managerEmail,
           }),
         });
         const d = await r.json();
@@ -258,7 +284,11 @@ export default function EmployeeManager() {
 
   // CSV template download
   const downloadTemplate = () => {
-    const csv = 'Full Name,Email,Password,Role\nSatvik Sharma,satvik@gharpayy.com,Pass@1234,employee\nPulkit Gupta,pulkit@gharpayy.com,Pass@1234,employee';
+    const csv = [
+      'Full Name,Email,Password,Role,DOB,Department,Team,Job Role,Office Zone,Manager Email',
+      'Satvik Sharma,satvik@gharpayy.com,Pass@1234,employee,1998-07-12,Sales,MWB MORE,full-time,KORA CORE,manager@gharpayy.com',
+      'Pulkit Gupta,pulkit@gharpayy.com,Pass@1234,employee,1997-03-05,Ops,KORA CORE,full-time,MWB MORE,manager@gharpayy.com',
+    ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

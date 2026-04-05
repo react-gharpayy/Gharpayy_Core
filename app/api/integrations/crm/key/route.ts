@@ -17,7 +17,7 @@ export async function GET() {
     }
 
     await connectDB();
-    const doc = await IntegrationKey.findOne({ orgId: user.id }).lean();
+    const doc = await IntegrationKey.findOne({ orgId: String(user.id) }).lean();
     return NextResponse.json({
       ok: true,
       connected: !!doc?.key,
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
 
     await connectDB();
     const doc = await IntegrationKey.findOneAndUpdate(
-      { orgId: user.id },
+      { orgId: String(user.id) },
       { key },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     ).lean();

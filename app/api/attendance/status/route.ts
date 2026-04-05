@@ -4,7 +4,7 @@ import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import Leave from '@/models/Leave';
 import { getAuthUser } from '@/lib/auth';
-import { deriveStatusFromAttendance, getISTDateStr, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
+import { applyUserSchedule, deriveStatusFromAttendance, getISTDateStr, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
 import { IST_OFFSET_MS } from '@/lib/constants';
 
 function fmtTime(d: Date) {
@@ -93,7 +93,8 @@ export async function GET() {
       reason: 'Off tomorrow',
       status: { $in: ['pending', 'approved'] },
     }).lean() as any;
-    const rules = await getShiftRules();
+    const baseRules = await getShiftRules();
+    const rules = applyUserSchedule(baseRules, dbUser?.workSchedule);
 
     if (!att) {
       return NextResponse.json({

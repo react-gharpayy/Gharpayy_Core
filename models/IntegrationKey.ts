@@ -1,19 +1,24 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IIntegrationKey extends Document {
-  orgId: mongoose.Types.ObjectId;
+  orgId: string;
   key: string;
   updatedAt?: Date;
   createdAt?: Date;
 }
 
 const IntegrationKeySchema = new Schema<IIntegrationKey>({
-  orgId: { type: Schema.Types.ObjectId, ref: 'GpAttUser', required: true, unique: true },
+  // Keep as string to support static admin id ("admin") and normal ObjectId strings
+  orgId: { type: String, required: true, unique: true },
   key: { type: String, required: true },
 }, { timestamps: true });
 
+// Ensure updated schema is used during dev/hot-reload
+if (mongoose.models.GpIntegrationKey) {
+  delete mongoose.models.GpIntegrationKey;
+}
+
 const IntegrationKey: Model<IIntegrationKey> =
-  mongoose.models.GpIntegrationKey ||
   mongoose.model<IIntegrationKey>('GpIntegrationKey', IntegrationKeySchema);
 
 export default IntegrationKey;

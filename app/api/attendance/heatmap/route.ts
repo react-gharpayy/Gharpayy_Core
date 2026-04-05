@@ -4,7 +4,7 @@ import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import OfficeZone from '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
-import { deriveStatusFromAttendance, getISTDateStr, getShiftRules } from '@/lib/attendance-utils';
+import { applyUserSchedule, deriveStatusFromAttendance, getISTDateStr, getShiftRules } from '@/lib/attendance-utils';
 import { IST_OFFSET_MS } from '@/lib/constants';
 
 const IST_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
@@ -75,17 +75,17 @@ export async function GET(req: NextRequest) {
     // Get week off day + shift rules from DB
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const zone = await OfficeZone.findOne({}).lean() as any;
-    const rules = await getShiftRules();
+    const baseRules = await getShiftRules();
     const weekOffDay   = zone?.weekOffDay || 'Tuesday';
     const weekOffLabel = WEEK_OFF_LABEL[weekOffDay] || 'Tue';
 
     const shiftInfo = {
-      earlyBefore:  rules.shiftStart,
-      onTimeTill:   `${rules.shiftStart} + ${rules.graceMinutes}m`,
-      lateAfter:    `${rules.shiftStart} + ${rules.graceMinutes}m`,
-      shiftStart: rules.shiftStart,
-      shiftEnd: rules.shiftEnd,
-      graceMinutes: rules.graceMinutes,
+      earlyBefore:  baseRules.shiftStart,
+      onTimeTill:   `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+      lateAfter:    `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+      shiftStart: baseRules.shiftStart,
+      shiftEnd: baseRules.shiftEnd,
+      graceMinutes: baseRules.graceMinutes,
       weekOffDay,
       weekOffLabel,
     };
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const users = await User.find(userQuery, 'fullName email role officeZoneId isApproved')
+      const users = await User.find(userQuery, 'fullName email role officeZoneId isApproved workSchedule')
         .select('-profilePhoto')
         .populate('officeZoneId', 'name')
         .lean() as any[];
@@ -157,6 +157,7 @@ export async function GET(req: NextRequest) {
         .map((u: any) => {
           const att       = logAtt.find(a => a.employeeId.toString() === u._id.toString());
           const firstSess = att?.sessions?.[0];
+          const rules = applyUserSchedule(baseRules, u.workSchedule);
           const derived = att ? deriveStatusFromAttendance(att, rules) : { dayStatus: 'Absent', lateByMins: 0, earlyByMins: 0 };
           return {
             employeeId:    u._id.toString(),

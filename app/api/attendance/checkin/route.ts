@@ -6,10 +6,12 @@ import {
   autoCloseMissedClockOut,
   getISTDateStr,
   getShiftRules,
+  applyUserSchedule,
   getStatusByShiftRules,
   recomputeAttendanceTotals,
 } from '@/lib/attendance-utils';
 import { notifyLateAlert } from '@/lib/system-notifications';
+import User from '@/models/User';
 
 function fmtISTTimeLabel(date: Date) {
   return new Date(date).toLocaleTimeString('en-IN', {
@@ -29,6 +31,10 @@ export async function POST(req: NextRequest) {
     const { lat, lng, type } = await req.json().catch(() => ({ lat: null, lng: null, type: null }));
     await connectDB();
     await autoCloseMissedClockOut(user.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dbUser = await User.findById(user.id).select('workSchedule').lean() as any;
+    const baseRules = await getShiftRules();
+    const rules = applyUserSchedule(baseRules, dbUser?.workSchedule);
 
     const date = getISTDateStr();
     let att = await Attendance.findOne({ employeeId: user.id, date });
@@ -78,7 +84,6 @@ export async function POST(req: NextRequest) {
     if (att?.isInField) return NextResponse.json({ error: 'Field visit active. Return first.' }, { status: 400 });
 
     if (!att) {
-      const rules = await getShiftRules();
       const status = getStatusByShiftRules(now, rules);
       att = new Attendance({
         employeeId: user.id,
@@ -99,7 +104,6 @@ export async function POST(req: NextRequest) {
       att.isCheckedIn = true;
       att.workMode = 'Present';
       if (att.sessions.length === 1) {
-        const rules = await getShiftRules();
         const status = getStatusByShiftRules(now, rules);
         att.dayStatus = status.dayStatus;
         att.lateByMins = status.lateByMins;
@@ -112,7 +116,6 @@ export async function POST(req: NextRequest) {
     await att.save();
 
     if (att.dayStatus === 'Late') {
-      const rules = await getShiftRules();
       await notifyLateAlert({
         employeeId: user.id,
         employeeName: user.fullName || user.email || 'Employee',

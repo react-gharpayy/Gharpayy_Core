@@ -14,7 +14,7 @@ export async function GET() {
     if (!baseUrl) return NextResponse.json({ error: 'CRM_BASE_URL is not set' }, { status: 500 });
 
     await connectDB();
-    const keyDoc = await IntegrationKey.findOne({ orgId: user.id }).lean();
+    const keyDoc = await IntegrationKey.findOne({ orgId: String(user.id) }).lean();
     if (!keyDoc?.key) {
       return NextResponse.json({ error: 'CRM integration key not connected' }, { status: 400 });
     }

@@ -1,5 +1,6 @@
 ﻿'use client';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Clock } from 'lucide-react';
 
 interface AttStatus {
@@ -45,6 +46,9 @@ function fmtDate(iso?: string) {
 }
 
 export default function EmployeeDetail({ employeeId }: { employeeId?: string }) {
+  const searchParams = useSearchParams();
+  const queryEmployeeId = searchParams?.get('employeeId') || searchParams?.get('employeeid') || '';
+  const effectiveEmployeeId = employeeId || queryEmployeeId;
   const [att, setAtt] = useState<AttStatus | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>('');
@@ -134,7 +138,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
           const e = await fetch('/api/employees?page=1&limit=100', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ users: [] }));
           const emps = (e.users || []).filter((u: any) => u.role === 'employee').map((u: any) => ({ _id: u._id, fullName: u.fullName }));
           setEmployees(emps);
-          const first = employeeId || emps[0]?._id || '';
+          const first = effectiveEmployeeId || emps[0]?._id || '';
           setSelectedEmployee(first);
           setLoading(true);
           fetchStatus(first);
@@ -158,6 +162,19 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
         fetchStatus();
       });
   }, []);
+
+  useEffect(() => {
+    if (!effectiveEmployeeId) return;
+    if (userRole === 'admin' || userRole === 'manager') {
+      if (selectedEmployee !== effectiveEmployeeId) {
+        setSelectedEmployee(effectiveEmployeeId);
+        setLoading(true);
+        fetchStatus(effectiveEmployeeId);
+        fetchDetail(effectiveEmployeeId);
+        fetchHistory(effectiveEmployeeId, 1);
+      }
+    }
+  }, [effectiveEmployeeId, userRole]);
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3500); };
 
@@ -380,8 +397,11 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
                 <label className="block text-[10px] text-gray-600 mb-1">{field.label}</label>
                 <input
                   type="number"
-                  value={Number(leaveBalance[field.key] || 0)}
-                  onChange={(e) => setLeaveBalance((p: any) => ({ ...p, [field.key]: Number(e.target.value) }))}
+                  value={Number.isFinite(Number(leaveBalance?.[field.key])) ? Number(leaveBalance[field.key]) : 0}
+                  onChange={(e) => {
+                    const nextVal = Number(e.target.value);
+                    setLeaveBalance((p: any) => ({ ...p, [field.key]: Number.isFinite(nextVal) ? nextVal : 0 }));
+                  }}
                   className="w-full px-2 py-2 rounded-lg text-xs focus:outline-none"
                   style={{ background: '#ffffff', border: '1px solid #e5e7eb', color: '#374151' }}
                 />
@@ -674,4 +694,9 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
     </div>
   );
 }
+
+
+
+
+
 
