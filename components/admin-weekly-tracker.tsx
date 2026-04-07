@@ -20,7 +20,6 @@ export default function AdminWeeklyTracker() {
   const [summary, setSummary] = useState<any>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [employees, setEmployees] = useState<any[]>([]);
-  const [labels, setLabels] = useState({ g1: 'G1', g2: 'G2', g3: 'G3', g4: 'G4', glTours: 'GL Tours' });
   const [loading, setLoading] = useState(true);
 
   const fetchList = async () => {
@@ -39,7 +38,6 @@ export default function AdminWeeklyTracker() {
       if (d.ok) {
         setRows(d.rows || []);
         setSummary(d.summary || null);
-        if (d.labels) setLabels(d.labels);
       }
     } catch {
       setRows([]);
@@ -81,12 +79,13 @@ export default function AdminWeeklyTracker() {
     compliance: t.compliance || 0,
   })) || [];
 
-  const goalsData = analytics?.goals ? [
-    { name: labels.g1, rate: analytics.goals.g1.rate || 0 },
-    { name: labels.g2, rate: analytics.goals.g2.rate || 0 },
-    { name: labels.g3, rate: analytics.goals.g3.rate || 0 },
-    { name: labels.g4, rate: analytics.goals.g4.rate || 0 },
-    { name: labels.glTours, rate: analytics.goals.glTours.rate || 0 },
+  const metricsData = analytics?.metrics ? [
+    { name: '30 DRAFTS?', value: analytics.metrics.drafts30 || 0 },
+    { name: 'MYT ADDED', value: analytics.metrics.mytAdded || 0 },
+    { name: 'TOURS IN PIPELINE', value: analytics.metrics.toursPipeline || 0 },
+    { name: 'TOURS DONE', value: analytics.metrics.toursDone || 0 },
+    { name: 'CALLS DONE', value: analytics.metrics.callsDone || 0 },
+    { name: 'CONNECTED', value: analytics.metrics.connected || 0 },
   ] : [];
 
   return (
@@ -240,18 +239,18 @@ export default function AdminWeeklyTracker() {
           )}
         </div>
         <div style={card} className="p-5">
-          <h2 className="text-sm font-bold text-gray-900 mb-3">Goal Achievement Rates</h2>
-          {goalsData.length === 0 ? (
-            <div className="text-xs text-gray-500">No goal data yet.</div>
+          <h2 className="text-sm font-bold text-gray-900 mb-3">Weekly Metric Totals</h2>
+          {metricsData.length === 0 ? (
+            <div className="text-xs text-gray-500">No metric data yet.</div>
           ) : (
             <div style={{ width: '100%', height: 220 }}>
               <ResponsiveContainer>
-                <BarChart data={goalsData}>
+                <BarChart data={metricsData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="rate" fill="#10b981" />
+                  <Bar dataKey="value" fill="#10b981" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -268,7 +267,7 @@ export default function AdminWeeklyTracker() {
         ) : (
           <div className="space-y-2">
             {rows.map((r) => (
-              <div key={r.employeeId} className="grid grid-cols-1 md:grid-cols-[2fr,1fr,1fr,1fr,1fr,1fr,auto] gap-2 items-center p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <div key={r.employeeId} className="grid grid-cols-1 md:grid-cols-[2fr,0.7fr,0.9fr,0.9fr,0.9fr,0.9fr,0.9fr,0.9fr,0.8fr,auto] gap-2 items-center p-3 rounded-xl border border-gray-100 bg-gray-50">
                 <div>
                   <div className="text-sm font-semibold text-gray-900">{r.employeeName}</div>
                   <div className="text-[10px]" style={{ color: '#6b7280' }}>
@@ -276,13 +275,20 @@ export default function AdminWeeklyTracker() {
                   </div>
                 </div>
                 <div className="text-xs text-gray-700">W{filters.week}</div>
-                {['g1','g2','g3','g4'].map((k) => (
-                  <div key={k} className="text-xs text-gray-700">
-                    {r.tracker?.[k]?.actual ?? 0}/{r.tracker?.[k]?.target ?? 0}
+                {[
+                  { key: 'drafts30', label: '30 DRAFTS?' },
+                  { key: 'mytAdded', label: 'MYT ADDED' },
+                  { key: 'toursPipeline', label: 'TOURS IN PIPELINE' },
+                  { key: 'toursDone', label: 'TOURS DONE' },
+                  { key: 'callsDone', label: 'CALLS DONE' },
+                  { key: 'connected', label: 'CONNECTED' },
+                ].map((k) => (
+                  <div key={k.key} className="text-xs text-gray-700">
+                    {r.tracker?.[k.key] ?? 0}
                   </div>
                 ))}
                 <div className="text-xs text-gray-700">
-                  {r.tracker?.glTours?.actual ?? 0}/{r.tracker?.glTours?.target ?? 0}
+                  {r.tracker?.doubts ? 'Yes' : 'No'}
                 </div>
                 <div className={`text-xs font-semibold ${
                   r.status === 'reviewed' ? 'text-emerald-600' : r.status === 'submitted' ? 'text-orange-500' : r.status === 'draft' ? 'text-gray-600' : 'text-red-500'

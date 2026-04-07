@@ -107,23 +107,14 @@ export async function GET(req: NextRequest) {
     });
 
     const weekTrackers = await WeeklyTracker.find({ year, weekNumber, employeeId: { $in: userIds } }).lean() as any[];
-    const sumGoal = (key: 'g1' | 'g2' | 'g3' | 'g4' | 'glTours') => {
-      const totals = weekTrackers.reduce((acc, t) => {
-        const g = t[key] || {};
-        acc.target += Number(g.target || 0);
-        acc.actual += Number(g.actual || 0);
-        return acc;
-      }, { target: 0, actual: 0 });
-      const rate = totals.target > 0 ? Math.round((totals.actual / totals.target) * 100) : 0;
-      return { target: totals.target, actual: totals.actual, rate };
-    };
-
-    const goals = {
-      g1: sumGoal('g1'),
-      g2: sumGoal('g2'),
-      g3: sumGoal('g3'),
-      g4: sumGoal('g4'),
-      glTours: sumGoal('glTours'),
+    const sumMetric = (key: string) => weekTrackers.reduce((acc, t) => acc + Number(t?.[key] || 0), 0);
+    const metrics = {
+      drafts30: sumMetric('drafts30'),
+      mytAdded: sumMetric('mytAdded'),
+      toursPipeline: sumMetric('toursPipeline'),
+      toursDone: sumMetric('toursDone'),
+      callsDone: sumMetric('callsDone'),
+      connected: sumMetric('connected'),
     };
 
     const last4Agg = await WeeklyTracker.aggregate([
@@ -174,7 +165,7 @@ export async function GET(req: NextRequest) {
         complianceWeek,
         complianceLast4,
       },
-      goals,
+      metrics,
       trend,
       roleWise,
       teamWise,

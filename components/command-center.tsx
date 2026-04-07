@@ -19,6 +19,12 @@ interface CCData {
   compare?: { yesterdayPresent: number; presentDelta: number };
   date: string;
 }
+interface CrmDaily {
+  date: string;
+  leadsToday: number;
+  toursScheduledToday: number;
+  perEmployee: { memberId: string; name: string; zoneName?: string; leadsToday: number; toursToday: number }[];
+}
 
 const MODE_DOT: Record<string, string> = {
   Present: '#10b981', Break: '#f59e0b', Field: '#6366f1', WFH: '#a855f7', Absent: '#374151',
@@ -65,13 +71,20 @@ function KPIRing({ value, label, color, trend }: { value: number; label: string;
 export default function CommandCenter() {
   const router = useRouter();
   const [data, setData] = useState<CCData | null>(null);
+  const [crmDaily, setCrmDaily] = useState<CrmDaily | null>(null);
   const [loading, setLoading] = useState(true);
   const [time, setTime] = useState('');
 
   const fetchData = useCallback(() => {
-    fetch('/api/command-center', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => { if (d.ok) setData(d); })
+    Promise.all([
+      fetch('/api/command-center', { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+      fetch('/api/integrations/crm/daily', { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+    ])
+      .then(([cc, crm]) => {
+        if (cc?.ok) setData(cc);
+        if (crm && !crm.error) setCrmDaily(crm);
+        else setCrmDaily(null);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -221,6 +234,48 @@ export default function CommandCenter() {
           <KPIRing value={kpis.breakDiscipline} label="Break Discipline" color="#ef4444" />
         </div>
       </div>
+
+      {/* CRM Daily KPIs */}
+      {crmDaily && (
+        <div style={card} className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-gray-900">CRM - Daily Activity</h2>
+            <span className="text-[10px]" style={{ color: '#6b7280' }}>Live</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="p-4 rounded-2xl border" style={{ borderColor: '#f3f4f6', background: '#fff' }}>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: '#6b7280' }}>Leads Added Today</div>
+              <div className="text-3xl font-bold text-gray-900 mt-2">{crmDaily.leadsToday || 0}</div>
+            </div>
+            <div className="p-4 rounded-2xl border" style={{ borderColor: '#f3f4f6', background: '#fff' }}>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: '#6b7280' }}>Tours Scheduled Today</div>
+              <div className="text-3xl font-bold text-gray-900 mt-2">{crmDaily.toursScheduledToday || 0}</div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[11px] font-semibold text-gray-700">Today - Per Employee</div>
+            <div className="text-[10px]" style={{ color: '#6b7280' }}>{crmDaily.perEmployee?.length || 0} members</div>
+          </div>
+          {crmDaily.perEmployee?.length ? (
+            <div className="space-y-2 max-h-56 overflow-y-auto no-scrollbar">
+              {crmDaily.perEmployee.map((row) => (
+                <div key={row.memberId} className="flex items-center justify-between px-3 py-2 rounded-xl border border-gray-100 bg-gray-50">
+                  <div>
+                    <div className="text-xs font-semibold text-gray-900">{row.name}</div>
+                    <div className="text-[10px]" style={{ color: '#6b7280' }}>{row.zoneName || 'No Zone'}</div>
+                  </div>
+                  <div className="flex items-center gap-4 text-[10px] text-gray-700">
+                    <span>{row.leadsToday || 0} leads</span>
+                    <span>{row.toursToday || 0} tours</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">No activity recorded today.</div>
+          )}
+        </div>
+      )}
 
       {/* Tracker Compliance */}
       {data.trackerCompliance && (

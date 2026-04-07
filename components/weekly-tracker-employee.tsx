@@ -3,18 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { getCurrentWeekInfo, getWeekRange } from '@/lib/week-utils';
 
-const EMPTY_GOAL = { target: 0, actual: 0, notes: '' };
 const EMPTY_FORM = {
-  g1: { ...EMPTY_GOAL },
-  g2: { ...EMPTY_GOAL },
-  g3: { ...EMPTY_GOAL },
-  g4: { ...EMPTY_GOAL },
-  glTours: { target: 0, actual: 0, locations: '' },
-  initial: '',
-  onIt: '',
-  impact: '',
-  notes: '',
-  issues: '',
+  drafts30: 0,
+  mytAdded: 0,
+  toursPipeline: 0,
+  toursDone: 0,
+  callsDone: 0,
+  connected: 0,
+  doubts: '',
 };
 
 export default function WeeklyTrackerEmployee() {
@@ -22,16 +18,14 @@ export default function WeeklyTrackerEmployee() {
   const [year, setYear] = useState(now.year);
   const [weekNumber, setWeekNumber] = useState(now.weekNumber);
   const [weekRange, setWeekRange] = useState(getWeekRange(now.year, now.weekNumber));
-  const [labels, setLabels] = useState({ g1: 'G1', g2: 'G2', g3: 'G3', g4: 'G4', glTours: 'GL Tours' });
   const [tracker, setTracker] = useState<any>(null);
   const [form, setForm] = useState<any>(EMPTY_FORM);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [openGoals, setOpenGoals] = useState(true);
-  const [openGL, setOpenGL] = useState(true);
-  const [openWrap, setOpenWrap] = useState(true);
+  const [openMetrics, setOpenMetrics] = useState(true);
+  const [openDoubts, setOpenDoubts] = useState(true);
 
   const isCurrentWeek = year === now.year && weekNumber === now.weekNumber;
   const isFutureWeek = year > now.year || (year === now.year && weekNumber > now.weekNumber);
@@ -41,22 +35,6 @@ export default function WeeklyTrackerEmployee() {
   useEffect(() => {
     setWeekRange(getWeekRange(year, weekNumber));
   }, [year, weekNumber]);
-
-  const loadConfig = async () => {
-    try {
-      const r = await fetch('/api/tracker/weekly/config', { cache: 'no-store' });
-      const d = await r.json();
-      if (d.ok && d.config) {
-        setLabels({
-          g1: d.config.g1Label || 'G1',
-          g2: d.config.g2Label || 'G2',
-          g3: d.config.g3Label || 'G3',
-          g4: d.config.g4Label || 'G4',
-          glTours: d.config.glToursLabel || 'GL Tours',
-        });
-      }
-    } catch {}
-  };
 
   const loadWeek = async () => {
     setLoading(true);
@@ -68,16 +46,13 @@ export default function WeeklyTrackerEmployee() {
         setTracker(rec || null);
         if (rec) {
           setForm({
-            g1: rec.g1 || { ...EMPTY_GOAL },
-            g2: rec.g2 || { ...EMPTY_GOAL },
-            g3: rec.g3 || { ...EMPTY_GOAL },
-            g4: rec.g4 || { ...EMPTY_GOAL },
-            glTours: rec.glTours || { target: 0, actual: 0, locations: '' },
-            initial: rec.initial || '',
-            onIt: rec.onIt || '',
-            impact: rec.impact || '',
-            notes: rec.notes || '',
-            issues: rec.issues || '',
+            drafts30: Number(rec.drafts30 || 0),
+            mytAdded: Number(rec.mytAdded || 0),
+            toursPipeline: Number(rec.toursPipeline || 0),
+            toursDone: Number(rec.toursDone || 0),
+            callsDone: Number(rec.callsDone || 0),
+            connected: Number(rec.connected || 0),
+            doubts: rec.doubts || '',
           });
         } else {
           setForm(EMPTY_FORM);
@@ -97,10 +72,6 @@ export default function WeeklyTrackerEmployee() {
       setHistory([]);
     }
   };
-
-  useEffect(() => {
-    loadConfig();
-  }, []);
 
   useEffect(() => {
     loadWeek();
@@ -200,132 +171,53 @@ export default function WeeklyTrackerEmployee() {
       ) : (
         <>
           <div style={card} className="p-5 space-y-4">
-            <button onClick={() => setOpenGoals(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">
-              Goals (G1-G4)
-              {openGoals ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <button onClick={() => setOpenMetrics(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">
+              Weekly Metrics
+              {openMetrics ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
-            {openGoals && (
-              <div className="space-y-4">
+            {openMetrics && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {[
-                  { key: 'g1', label: labels.g1 },
-                  { key: 'g2', label: labels.g2 },
-                  { key: 'g3', label: labels.g3 },
-                  { key: 'g4', label: labels.g4 },
-                ].map((g) => (
-                  <div key={g.key} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-700 mb-1.5">{g.label} Target</label>
-                      <input
-                        type="number"
-                        min={0}
-                        disabled={!canEdit}
-                        value={form[g.key].target}
-                        onChange={(e) => setForm((p: any) => ({ ...p, [g.key]: { ...p[g.key], target: Number(e.target.value) } }))}
-                        className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
-                        style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-700 mb-1.5">{g.label} Actual</label>
-                      <input
-                        type="number"
-                        min={0}
-                        disabled={!canEdit}
-                        value={form[g.key].actual}
-                        onChange={(e) => setForm((p: any) => ({ ...p, [g.key]: { ...p[g.key], actual: Number(e.target.value) } }))}
-                        className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
-                        style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
-                      />
-                    </div>
-                    <div className="md:col-span-1">
-                      <label className="block text-xs text-gray-700 mb-1.5">{g.label} Notes</label>
-                      <textarea
-                        rows={2}
-                        disabled={!canEdit}
-                        value={form[g.key].notes}
-                        onChange={(e) => setForm((p: any) => ({ ...p, [g.key]: { ...p[g.key], notes: e.target.value } }))}
-                        className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
-                        style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div style={card} className="p-5 space-y-4">
-            <button onClick={() => setOpenGL(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">
-              {labels.glTours}
-              {openGL ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {openGL && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-700 mb-1.5">Target Visits</label>
-                  <input
-                    type="number"
-                    min={0}
-                    disabled={!canEdit}
-                    value={form.glTours.target}
-                    onChange={(e) => setForm((p: any) => ({ ...p, glTours: { ...p.glTours, target: Number(e.target.value) } }))}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
-                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-700 mb-1.5">Actual Visits</label>
-                  <input
-                    type="number"
-                    min={0}
-                    disabled={!canEdit}
-                    value={form.glTours.actual}
-                    onChange={(e) => setForm((p: any) => ({ ...p, glTours: { ...p.glTours, actual: Number(e.target.value) } }))}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
-                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-700 mb-1.5">Locations Visited</label>
-                  <textarea
-                    rows={2}
-                    disabled={!canEdit}
-                    value={form.glTours.locations}
-                    onChange={(e) => setForm((p: any) => ({ ...p, glTours: { ...p.glTours, locations: e.target.value } }))}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
-                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={card} className="p-5 space-y-4">
-            <button onClick={() => setOpenWrap(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">
-              Weekly Wrap-Up
-              {openWrap ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {openWrap && (
-              <div className="space-y-3">
-                {[
-                  { key: 'initial', label: 'INITIAL' },
-                  { key: 'onIt', label: 'ON IT' },
-                  { key: 'impact', label: 'IMPACT' },
-                  { key: 'notes', label: 'NOTES' },
-                  { key: 'issues', label: 'ISSUES' },
+                  { key: 'drafts30', label: '30 DRAFTS?' },
+                  { key: 'mytAdded', label: 'MYT ADDED' },
+                  { key: 'toursPipeline', label: 'TOURS IN PIPELINE' },
+                  { key: 'toursDone', label: 'TOURS DONE' },
+                  { key: 'callsDone', label: 'CALLS DONE' },
+                  { key: 'connected', label: 'CONNECTED' },
                 ].map((f) => (
                   <div key={f.key}>
                     <label className="block text-xs text-gray-700 mb-1.5">{f.label}</label>
-                    <textarea
-                      rows={3}
+                    <input
+                      type="number"
+                      min={0}
                       disabled={!canEdit}
-                      value={form[f.key]}
-                      onChange={(e) => setForm((p: any) => ({ ...p, [f.key]: e.target.value }))}
+                      value={form[f.key] ?? 0}
+                      onChange={(e) => setForm((p: any) => ({ ...p, [f.key]: Number(e.target.value) }))}
                       className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
                       style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
                     />
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          <div style={card} className="p-5 space-y-4">
+            <button onClick={() => setOpenDoubts(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">
+              DOUBTS
+              {openDoubts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {openDoubts && (
+              <div>
+                <label className="block text-xs text-gray-700 mb-1.5">Doubts / Blockers</label>
+                <textarea
+                  rows={4}
+                  disabled={!canEdit}
+                  value={form.doubts || ''}
+                  onChange={(e) => setForm((p: any) => ({ ...p, doubts: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
+                  style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
+                />
               </div>
             )}
           </div>

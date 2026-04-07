@@ -144,36 +144,25 @@ export default function AdminWeeklyTrackerDetail({ employeeId }: { employeeId: s
               <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-green-50 text-green-600">Good Week ✓</span>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-            {['g1','g2','g3','g4'].map((k) => (
-              <div key={k} className="p-2 rounded-lg bg-gray-50 border border-gray-100">
-                <div className="text-[10px] text-gray-500 uppercase">{k.toUpperCase()}</div>
-                <div className="text-sm font-semibold text-gray-900">{active[k]?.actual ?? 0}/{active[k]?.target ?? 0}</div>
-                <div className="text-[10px] text-gray-500">{active[k]?.notes || '—'}</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+            {[
+              { key: 'drafts30', label: '30 DRAFTS?' },
+              { key: 'mytAdded', label: 'MYT ADDED' },
+              { key: 'toursPipeline', label: 'TOURS IN PIPELINE' },
+              { key: 'toursDone', label: 'TOURS DONE' },
+              { key: 'callsDone', label: 'CALLS DONE' },
+              { key: 'connected', label: 'CONNECTED' },
+            ].map((f) => (
+              <div key={f.key} className="p-2 rounded-lg bg-gray-50 border border-gray-100">
+                <div className="text-[10px] text-gray-500">{f.label}</div>
+                <div className="text-sm font-semibold text-gray-900">{active?.[f.key] ?? 0}</div>
               </div>
             ))}
-            <div className="p-2 rounded-lg bg-gray-50 border border-gray-100">
-              <div className="text-[10px] text-gray-500 uppercase">GL Tours</div>
-              <div className="text-sm font-semibold text-gray-900">{active.glTours?.actual ?? 0}/{active.glTours?.target ?? 0}</div>
-              <div className="text-[10px] text-gray-500">{active.glTours?.locations || '—'}</div>
+            <div className="p-2 rounded-lg bg-gray-50 border border-gray-100 md:col-span-3">
+              <div className="text-[10px] text-gray-500">DOUBTS</div>
+              <div className="text-sm text-gray-900 mt-1">{active?.doubts || '--'}</div>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            {[
-              { label: 'INITIAL', value: active.initial },
-              { label: 'ON IT', value: active.onIt },
-              { label: 'IMPACT', value: active.impact },
-              { label: 'NOTES', value: active.notes },
-              { label: 'ISSUES', value: active.issues },
-            ].map((f) => (
-              <div key={f.label} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
-                <div className="text-[10px] text-gray-500">{f.label}</div>
-                <div className="text-sm text-gray-900 mt-1">{f.value || '—'}</div>
-              </div>
-            ))}
-          </div>
-
           {active.status === 'submitted' && (
             <div className="space-y-3 pt-2">
               <div className="text-sm font-semibold text-gray-900">Admin Review</div>

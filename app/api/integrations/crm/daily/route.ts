@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { getAuthUser, verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import IntegrationKey from '@/models/IntegrationKey';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user || user.role !== 'admin') {
+    let user = await getAuthUser();
+    if (!user) {
+      const token = req.cookies.get(COOKIE_NAME)?.value;
+      if (token) user = verifyToken(token);
+    }
+    if (!user || !['admin', 'manager', 'sub_admin'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
