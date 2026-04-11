@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react';
 
 const LEAVE_TYPES = ['Paid', 'Sick', 'Casual', 'Comp Off', 'LOP'] as const;
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+function fmtDate(d?: string) {
+  if (!d) return '-';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '-';
+  return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 }
 
 export default function MyLeaves() {
@@ -202,7 +205,9 @@ export default function MyLeaves() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">{l.type}</div>
-                    <div className="text-xs text-gray-600">{fmtDate(l.startDate)} - {fmtDate(l.endDate)} • {l.days} day(s)</div>
+                    <div className="text-xs text-gray-600">
+                      {fmtDate(l.startDate)} - {fmtDate(l.endDate)} - {Number(l.days || 0)} day(s)
+                    </div>
                     {l.reason && <div className="text-[11px] text-gray-500">{l.reason}</div>}
                   </div>
                   <span className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${
