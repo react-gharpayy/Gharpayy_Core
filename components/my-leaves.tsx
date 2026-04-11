@@ -3,8 +3,22 @@ import { useEffect, useState } from 'react';
 
 const LEAVE_TYPES = ['Paid', 'Sick', 'Casual', 'Comp Off', 'LOP'] as const;
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+function fmtDate(d?: string) {
+  if (!d) return '-';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '-';
+  return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+}
+
+function getBalanceNumber(v: any) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') return Number(v) || 0;
+  if (typeof v === 'object') {
+    if (typeof v.total === 'number') return v.total;
+    if (typeof v.used === 'number') return v.used;
+  }
+  return 0;
 }
 
 export default function MyLeaves() {
@@ -171,15 +185,15 @@ export default function MyLeaves() {
         {balance ? (
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center">
             {[
-              { label: 'Paid', value: balance.paid },
-              { label: 'Sick', value: balance.sick },
-              { label: 'Casual', value: balance.casual },
-              { label: 'Comp Off', value: balance.compOff },
-              { label: 'LOP', value: balance.lop },
-              { label: 'Encashable', value: balance.encashable },
+              { label: 'Paid', value: getBalanceNumber(balance.paid ?? balance.earned) },
+              { label: 'Sick', value: getBalanceNumber(balance.sick) },
+              { label: 'Casual', value: getBalanceNumber(balance.casual) },
+              { label: 'Comp Off', value: getBalanceNumber(balance.compOff ?? balance.comp_off) },
+              { label: 'LOP', value: getBalanceNumber(balance.lop) },
+              { label: 'Encashable', value: getBalanceNumber(balance.encashable) },
             ].map(b => (
               <div key={b.label} className="p-3 rounded-xl" style={{ background: '#f9fafb', border: '1px solid #f3f4f6' }}>
-                <div className="text-lg font-bold text-gray-900">{b.value ?? 0}</div>
+                <div className="text-lg font-bold text-gray-900">{b.value}</div>
                 <div className="text-[10px] text-gray-600">{b.label}</div>
               </div>
             ))}
@@ -202,7 +216,9 @@ export default function MyLeaves() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">{l.type}</div>
-                    <div className="text-xs text-gray-600">{fmtDate(l.startDate)} - {fmtDate(l.endDate)} • {l.days} day(s)</div>
+                    <div className="text-xs text-gray-600">
+                      {fmtDate(l.startDate)} - {fmtDate(l.endDate)} - {Number(l.days || 0)} day(s)
+                    </div>
                     {l.reason && <div className="text-[11px] text-gray-500">{l.reason}</div>}
                   </div>
                   <span className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${
