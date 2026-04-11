@@ -42,6 +42,7 @@ export default function MyAttendance() {
     { key: 'G3MYT', label: 'G3MYT', range: '2:30 PM - 4:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
     { key: 'G4MYT', label: 'G4MYT', range: '4:00 PM - 5:35 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
   ]);
+  const [history, setHistory] = useState<any[]>([]);
 
   const fetchStatus = () => {
     fetch('/api/attendance/status', { cache: 'no-store' })
@@ -63,6 +64,12 @@ export default function MyAttendance() {
         if (d?.tracker?.dailyCheckins?.length) {
           setCheckins(d.tracker.dailyCheckins);
         }
+      })
+      .catch(() => {});
+    fetch('/api/tracker/history?limit=10', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d?.records)) setHistory(d.records);
       })
       .catch(() => {});
   }, []);
@@ -369,6 +376,42 @@ export default function MyAttendance() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Daily Growth History */}
+          <div style={card} className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-gray-900">Daily Growth History</h2>
+              <div className="text-[10px]" style={{ color: '#6b7280' }}>Last 10 entries</div>
+            </div>
+            {history.length === 0 ? (
+              <div className="text-xs text-gray-600">No history yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {history.map((h: any) => (
+                  <div key={h._id} className="p-3 rounded-xl border" style={{ borderColor: '#e5e7eb', background: '#fff' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-semibold text-gray-900">{h.date}</div>
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>
+                        {Array.isArray(h.dailyCheckins) ? h.dailyCheckins.filter((c: any) => c.status === 'completed').length : 0} completed
+                      </div>
+                    </div>
+                    {Array.isArray(h.dailyCheckins) && h.dailyCheckins.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 text-[10px]" style={{ color: '#6b7280' }}>
+                        {h.dailyCheckins.map((c: any) => (
+                          <div key={c.key} className="flex items-center justify-between">
+                            <span>{c.label}</span>
+                            <span>{c.status === 'completed' ? 'Completed' : c.status === 'started' ? 'Started' : 'Pending'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>No checkins recorded.</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Today's Timeline */}
