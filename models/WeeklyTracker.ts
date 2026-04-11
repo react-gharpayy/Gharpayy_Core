@@ -20,6 +20,8 @@ export interface IWeeklyTracker extends Document {
   callsDone: number;
   connected: number;
   doubts: string;
+  manualLeadsToday: number;
+  manualToursToday: number;
   g1: { target: number; actual: number; notes: string };
   g2: { target: number; actual: number; notes: string };
   g3: { target: number; actual: number; notes: string };
@@ -66,6 +68,8 @@ const WeeklyTrackerSchema = new Schema<IWeeklyTracker>({
   callsDone: { type: Number, default: 0, min: 0 },
   connected: { type: Number, default: 0, min: 0 },
   doubts: { type: String, default: '', maxlength: 2000 },
+  manualLeadsToday: { type: Number, default: 0, min: 0 },
+  manualToursToday: { type: Number, default: 0, min: 0 },
   g1: { type: GoalSchema, default: () => ({}) },
   g2: { type: GoalSchema, default: () => ({}) },
   g3: { type: GoalSchema, default: () => ({}) },

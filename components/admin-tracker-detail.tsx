@@ -94,6 +94,21 @@ export default function AdminTrackerDetail({ employeeId }: { employeeId: string 
                   <div><span className="text-gray-500">NOTES:</span> {r.notes || '-'}</div>
                   <div><span className="text-gray-500">ISSUES:</span> {r.issues || '-'}</div>
                 </div>
+                {Array.isArray(r.dailyCheckins) && r.dailyCheckins.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {r.dailyCheckins.map((c: any) => (
+                      <div key={c.key} className="p-2 rounded-lg border border-gray-100 bg-white">
+                        <div className="flex items-center justify-between">
+                          <div className="text-[11px] font-semibold text-gray-900">{c.label}</div>
+                          <div className="text-[10px]" style={{ color: '#6b7280' }}>{c.range}</div>
+                        </div>
+                        <div className="text-[10px] text-gray-600 mt-1">{c.targetCount || 0} tours by this check-in</div>
+                        <div className="text-[10px] text-gray-600 mt-1">{c.progressNote || '-'}</div>
+                        <div className="text-[10px] text-gray-500 mt-1">Status: {c.status}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

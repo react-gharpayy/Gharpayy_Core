@@ -83,7 +83,7 @@ export default function AdminWeeklyTrackerDetail({ employeeId }: { employeeId: s
       <div style={card} className="p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">ARENA OS - Weekly Tracker Detail</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">ARENA OS - Daily Tracker Detail</h1>
             <div className="text-xs" style={{ color: '#6b7280' }}>
               {employeeName} {role ? `• ${role}` : ''} {department ? `• ${department}` : ''} {team ? `• ${team}` : ''}
             </div>
@@ -161,6 +161,16 @@ export default function AdminWeeklyTrackerDetail({ employeeId }: { employeeId: s
             <div className="p-2 rounded-lg bg-gray-50 border border-gray-100 md:col-span-3">
               <div className="text-[10px] text-gray-500">DOUBTS</div>
               <div className="text-sm text-gray-900 mt-1">{active?.doubts || '--'}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <div className="text-[10px] text-gray-500">LEADS ADDED TODAY</div>
+              <div className="text-lg font-semibold text-gray-900">{active?.manualLeadsToday ?? 0}</div>
+            </div>
+            <div className="p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <div className="text-[10px] text-gray-500">TOURS SCHEDULED TODAY</div>
+              <div className="text-lg font-semibold text-gray-900">{active?.manualToursToday ?? 0}</div>
             </div>
           </div>
           {active.status === 'submitted' && (

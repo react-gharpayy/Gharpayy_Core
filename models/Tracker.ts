@@ -15,6 +15,16 @@ export interface ITracker extends Document {
   submissionStatus: 'pending' | 'submitted' | 'edited';
   adminViewedAt?: Date;
   completionScore: number;
+  dailyCheckins: {
+    key: string;
+    label: string;
+    range: string;
+    status: 'idle' | 'started' | 'completed';
+    targetCount: number;
+    progressNote: string;
+    startedAt?: string;
+    completedAt?: string;
+  }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +44,18 @@ const TrackerSchema = new Schema<ITracker>({
   submissionStatus: { type: String, enum: ['pending', 'submitted', 'edited'], default: 'pending' },
   adminViewedAt:    { type: Date, default: null },
   completionScore:  { type: Number, default: 0 },
+  dailyCheckins: [
+    {
+      key: { type: String, default: '' },
+      label: { type: String, default: '' },
+      range: { type: String, default: '' },
+      status: { type: String, enum: ['idle', 'started', 'completed'], default: 'idle' },
+      targetCount: { type: Number, default: 0 },
+      progressNote: { type: String, default: '' },
+      startedAt: { type: String, default: '' },
+      completedAt: { type: String, default: '' },
+    },
+  ],
 }, { timestamps: true });
 
 TrackerSchema.index({ employeeId: 1, date: 1 }, { unique: true });

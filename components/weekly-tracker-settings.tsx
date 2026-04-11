@@ -38,7 +38,7 @@ export default function WeeklyTrackerSettings() {
   return (
     <div style={card} className="p-5 space-y-4">
       <div>
-        <h2 className="text-lg font-bold text-gray-900">Weekly Tracker Labels</h2>
+        <h2 className="text-lg font-bold text-gray-900">Daily Tracker Labels</h2>
         <p className="text-xs text-gray-700">Customize labels used for G1-G4 and GL Tours.</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

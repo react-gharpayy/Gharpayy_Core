@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { label: 'Attendance Management', href: '/live-attendance', icon: Users },
   { label: 'Task Management Console', href: '/task-board', icon: ClipboardList },
   { label: 'Daily Updates', href: '/admin/tracker', icon: ClipboardList },
-  { label: 'Weekly Tracker', href: '/admin/weekly-tracker', icon: ClipboardCheck },
+  { label: 'Daily Tracker', href: '/admin/weekly-tracker', icon: ClipboardCheck },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },
   { label: 'Performance Analytics', href: '/kpis', icon: BarChart2 },
   { label: 'Team Hierarchy', href: '/team-hierarchy', icon: GitBranch },

@@ -11,7 +11,7 @@ const MOBILE_TABS = [
   { label: 'Home',          href: '/home',    icon: Home  },
   { label: 'My Attendance', href: '/clock',   icon: Clock },
   { label: 'Daily Updates', href: '/tracker', icon: ClipboardList },
-  { label: 'Weekly Tracker', href: '/weekly-tracker', icon: ClipboardList },
+  { label: 'Daily Tracker', href: '/weekly-tracker', icon: ClipboardList },
   { label: 'My Leaves',     href: '/my-leaves', icon: Calendar },
   { label: 'My Profile',    href: '/profile', icon: User  },
   { label: 'Notices',       href: '/notices', icon: Bell  },

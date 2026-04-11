@@ -11,6 +11,8 @@ const EMPTY_FORM = {
   callsDone: 0,
   connected: 0,
   doubts: '',
+  manualLeadsToday: 0,
+  manualToursToday: 0,
 };
 
 export default function WeeklyTrackerEmployee() {
@@ -26,6 +28,7 @@ export default function WeeklyTrackerEmployee() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [openMetrics, setOpenMetrics] = useState(true);
   const [openDoubts, setOpenDoubts] = useState(true);
+  const [openDailyKpis, setOpenDailyKpis] = useState(true);
 
   const isCurrentWeek = year === now.year && weekNumber === now.weekNumber;
   const isFutureWeek = year > now.year || (year === now.year && weekNumber > now.weekNumber);
@@ -53,6 +56,8 @@ export default function WeeklyTrackerEmployee() {
             callsDone: Number(rec.callsDone || 0),
             connected: Number(rec.connected || 0),
             doubts: rec.doubts || '',
+            manualLeadsToday: Number(rec.manualLeadsToday || 0),
+            manualToursToday: Number(rec.manualToursToday || 0),
           });
         } else {
           setForm(EMPTY_FORM);
@@ -103,13 +108,21 @@ export default function WeeklyTrackerEmployee() {
   const years = [now.year - 1, now.year].filter((y, idx, arr) => arr.indexOf(y) === idx);
 
   const card = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' };
+  const LEADS_TARGET = 40;
+  const TOURS_TARGET = 10;
+  const leadsDone = Number(form.manualLeadsToday || 0);
+  const toursDone = Number(form.manualToursToday || 0);
+  const leadsRemaining = Math.max(0, LEADS_TARGET - leadsDone);
+  const toursRemaining = Math.max(0, TOURS_TARGET - toursDone);
+  const leadsPct = Math.min(100, Math.round((leadsDone / LEADS_TARGET) * 100));
+  const toursPct = Math.min(100, Math.round((toursDone / TOURS_TARGET) * 100));
 
   return (
     <div className="space-y-4 pb-20 md:pb-4">
       <div style={card} className="p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Weekly Tracker</h1>
+            <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Daily Tracker</h1>
             <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
               Week {weekNumber} ({weekRange.startDate} - {weekRange.endDate})
             </div>
@@ -198,6 +211,92 @@ export default function WeeklyTrackerEmployee() {
                     />
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          <div style={card} className="p-5 space-y-4">
+            <button onClick={() => setOpenDailyKpis(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">
+              Daily KPI Check-ins
+              {openDailyKpis ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {openDailyKpis && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-4 rounded-2xl border" style={{ borderColor: '#e5e7eb', background: '#fff' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-gray-900">LEADS ADDED TODAY</div>
+                    <div className="text-[10px]" style={{ color: '#6b7280' }}>Target {LEADS_TARGET}</div>
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900">{leadsDone} <span className="text-sm text-gray-500">/ {LEADS_TARGET}</span></div>
+                  <div className="text-[11px] mt-1" style={{ color: '#6b7280' }}>{leadsDone} done · {leadsRemaining} to go</div>
+                  <div className="w-full h-1.5 rounded-full mt-3" style={{ background: '#f3f4f6' }}>
+                    <div className="h-1.5 rounded-full" style={{ width: `${leadsPct}%`, background: '#f97316' }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] mt-2" style={{ color: '#6b7280' }}>
+                    <span>{leadsPct}% of daily target</span>
+                    <span>On pace for {leadsDone} by EOD</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] mt-1" style={{ color: '#6b7280' }}>
+                    <span>{leadsDone} leads added</span>
+                    <span>{leadsRemaining} more to go</span>
+                  </div>
+                  <div className="text-[11px] mt-2" style={{ color: '#6b7280' }}>
+                    At the current pace, you’re tracking to finish with {leadsDone}. Pick up speed after lunch.
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <input
+                      type="number"
+                      min={0}
+                      value={leadsDone}
+                      onChange={(e) => setForm((p: any) => ({ ...p, manualLeadsToday: Number(e.target.value) }))}
+                      className="flex-1 px-3 py-2 rounded-xl text-sm border border-gray-200"
+                    />
+                    <button
+                      onClick={() => setForm((p: any) => ({ ...p, manualLeadsToday: Number(p.manualLeadsToday || 0) + 1 }))}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold border border-gray-200"
+                    >
+                      +1 lead
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl border" style={{ borderColor: '#e5e7eb', background: '#fff' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-gray-900">TOURS SCHEDULED TODAY</div>
+                    <div className="text-[10px]" style={{ color: '#6b7280' }}>Target {TOURS_TARGET}</div>
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900">{toursDone} <span className="text-sm text-gray-500">/ {TOURS_TARGET}</span></div>
+                  <div className="text-[11px] mt-1" style={{ color: '#6b7280' }}>{toursDone} done · {toursRemaining} to go</div>
+                  <div className="w-full h-1.5 rounded-full mt-3" style={{ background: '#f3f4f6' }}>
+                    <div className="h-1.5 rounded-full" style={{ width: `${toursPct}%`, background: '#f97316' }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] mt-2" style={{ color: '#6b7280' }}>
+                    <span>{toursPct}% of daily target</span>
+                    <span>On pace for {toursDone} by EOD</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] mt-1" style={{ color: '#6b7280' }}>
+                    <span>{toursDone} tours scheduled</span>
+                    <span>{toursRemaining} more needed</span>
+                  </div>
+                  <div className="text-[11px] mt-2" style={{ color: '#6b7280' }}>
+                    Next check-in window opens at afternoon. Update your progress then.
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <input
+                      type="number"
+                      min={0}
+                      value={toursDone}
+                      onChange={(e) => setForm((p: any) => ({ ...p, manualToursToday: Number(e.target.value) }))}
+                      className="flex-1 px-3 py-2 rounded-xl text-sm border border-gray-200"
+                    />
+                    <button
+                      onClick={() => setForm((p: any) => ({ ...p, manualToursToday: Number(p.manualToursToday || 0) + 1 }))}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold border border-gray-200"
+                    >
+                      +1 tour
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

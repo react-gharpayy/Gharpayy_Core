@@ -259,7 +259,7 @@ export default function AdminWeeklyTracker() {
       </div>
 
       <div style={card} className="p-5">
-        <h2 className="text-sm font-bold text-gray-900 mb-4">Weekly Tracker Submissions</h2>
+        <h2 className="text-sm font-bold text-gray-900 mb-4">Daily Tracker Submissions</h2>
         {loading ? (
           <div className="text-xs text-gray-500">Loading submissions...</div>
         ) : rows.length === 0 ? (

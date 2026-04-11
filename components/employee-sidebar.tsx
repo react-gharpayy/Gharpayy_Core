@@ -8,7 +8,7 @@ import { getCurrentWeekInfo } from '@/lib/week-utils';
 const NAV_ITEMS = [
   { label: 'My Attendance', href: '/home', icon: Clock },
   { label: 'Daily Updates', href: '/tracker', icon: ClipboardList },
-  { label: 'Weekly Tracker', href: '/weekly-tracker', icon: ClipboardCheck },
+  { label: 'Daily Tracker', href: '/weekly-tracker', icon: ClipboardCheck },
   { label: 'My Leaves', href: '/my-leaves', icon: Calendar },
   { label: 'My Tasks', href: '/my-tasks', icon: ClipboardList },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },

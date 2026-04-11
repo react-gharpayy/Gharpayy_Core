@@ -8,6 +8,19 @@ import mongoose from 'mongoose';
 function normalizeText(v: unknown) {
   return typeof v === 'string' ? v.trim() : '';
 }
+function normalizeCheckins(v: any) {
+  if (!Array.isArray(v)) return null;
+  return v.map((c) => ({
+    key: String(c?.key || ''),
+    label: String(c?.label || ''),
+    range: String(c?.range || ''),
+    status: ['idle', 'started', 'completed'].includes(c?.status) ? c.status : 'idle',
+    targetCount: Number(c?.targetCount || 0),
+    progressNote: typeof c?.progressNote === 'string' ? c.progressNote : '',
+    startedAt: typeof c?.startedAt === 'string' ? c.startedAt : '',
+    completedAt: typeof c?.completedAt === 'string' ? c.completedAt : '',
+  }));
+}
 
 export async function GET() {
   try {
@@ -33,12 +46,14 @@ export async function POST(req: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
+    const hasTextFields = ['initial','onIt','impact','notes','issues'].some((k) => k in body);
     const initial = normalizeText(body.initial);
     const onIt = normalizeText(body.onIt);
     const impact = normalizeText(body.impact);
     const notes = normalizeText(body.notes);
     const issues = normalizeText(body.issues);
     const submit = !!body.submit;
+    const checkins = normalizeCheckins(body.checkins);
     const missing = [initial, onIt, impact, notes, issues].some(v => !v);
     if (submit && missing) {
       return NextResponse.json({ error: 'Submit requires all fields' }, { status: 400 });
@@ -64,6 +79,7 @@ export async function POST(req: NextRequest) {
         impact,
         notes,
         issues,
+        dailyCheckins: checkins || [],
         submittedAt: submit ? new Date() : null,
         isSubmitted: submit,
         isEdited: false,
@@ -74,11 +90,16 @@ export async function POST(req: NextRequest) {
     }
 
     const wasSubmitted = !!existing.isSubmitted;
-    existing.initial = initial;
-    existing.onIt = onIt;
-    existing.impact = impact;
-    existing.notes = notes;
-    existing.issues = issues;
+    if (hasTextFields) {
+      existing.initial = initial;
+      existing.onIt = onIt;
+      existing.impact = impact;
+      existing.notes = notes;
+      existing.issues = issues;
+    }
+    if (checkins) {
+      existing.dailyCheckins = checkins;
+    }
     if (submit) {
       existing.isSubmitted = true;
       existing.isEdited = wasSubmitted || existing.isEdited;
@@ -88,7 +109,9 @@ export async function POST(req: NextRequest) {
       existing.isSubmitted = wasSubmitted;
       existing.submissionStatus = wasSubmitted ? (existing.isEdited ? 'edited' : 'submitted') : 'pending';
     }
-    existing.completionScore = completionScore;
+    if (hasTextFields) {
+      existing.completionScore = completionScore;
+    }
     await existing.save();
 
     return NextResponse.json({ ok: true, tracker: existing });
