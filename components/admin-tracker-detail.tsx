@@ -102,7 +102,7 @@ export default function AdminTrackerDetail({ employeeId }: { employeeId: string 
                           <div className="text-[11px] font-semibold text-gray-900">{c.label}</div>
                           <div className="text-[10px]" style={{ color: '#6b7280' }}>{c.range}</div>
                         </div>
-                        <div className="text-[10px] text-gray-600 mt-1">{c.targetCount || 0} tours by this check-in</div>
+                        <div className="text-[10px] text-gray-600 mt-1">{c.targetCount || 0} leads by this check-in</div>
                         <div className="text-[10px] text-gray-600 mt-1">{c.progressNote || '-'}</div>
                         <div className="text-[10px] text-gray-500 mt-1">Status: {c.status}</div>
                       </div>
