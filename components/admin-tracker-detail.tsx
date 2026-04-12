@@ -9,6 +9,26 @@ export default function AdminTrackerDetail({ employeeId }: { employeeId: string 
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState({ start: '', end: '' });
 
+  const defaultCheckins = [
+    { key: 'G1MYT', label: 'G1MYT', range: '10:30 AM - 12:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+    { key: 'G2MYT', label: 'G2MYT', range: '12:00 PM - 2:15 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+    { key: 'G3MYT', label: 'G3MYT', range: '2:30 PM - 4:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+    { key: 'G4MYT', label: 'G4MYT', range: '4:00 PM - 5:35 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+  ];
+
+  const buildDateRange = (start: string, end: string) => {
+    if (!start || !end) return [];
+    const out: string[] = [];
+    const s = new Date(`${start}T00:00:00`);
+    const e = new Date(`${end}T00:00:00`);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return [];
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      const iso = d.toISOString().slice(0, 10);
+      out.push(iso);
+    }
+    return out;
+  };
+
   const fetchDetail = async (start?: string, end?: string) => {
     setLoading(true);
     try {
@@ -41,6 +61,23 @@ export default function AdminTrackerDetail({ employeeId }: { employeeId: string 
   if (!data) {
     return <div className="text-xs text-gray-500">Unable to load tracker detail.</div>;
   }
+
+  const displayRecords = (() => {
+    if (Array.isArray(data.records) && data.records.length > 0) return data.records;
+    const dates = buildDateRange(range.start, range.end);
+    return dates.map((date) => ({
+      _id: `empty-${date}`,
+      date,
+      initial: '',
+      onIt: '',
+      impact: '',
+      notes: '',
+      issues: '',
+      isSubmitted: false,
+      isEdited: false,
+      dailyCheckins: defaultCheckins,
+    }));
+  })();
 
   return (
     <div className="space-y-4">
@@ -77,9 +114,9 @@ export default function AdminTrackerDetail({ employeeId }: { employeeId: string 
 
       <div style={card} className="p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-3">Daily Records</h2>
-        {data.records?.length ? (
+        {displayRecords?.length ? (
           <div className="space-y-2">
-            {data.records.map((r: any) => (
+            {displayRecords.map((r: any) => (
               <div key={r._id} className="p-3 rounded-xl border border-gray-100 bg-gray-50 text-xs">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold text-gray-900">{r.date}</div>
