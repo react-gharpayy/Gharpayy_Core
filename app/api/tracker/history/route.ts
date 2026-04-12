@@ -3,7 +3,18 @@ import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import Tracker from '@/models/Tracker';
 import User from '@/models/User';
+import Attendance from '@/models/Attendance';
 import mongoose from 'mongoose';
+import { getISTDateStr } from '@/lib/attendance-utils';
+
+function getDefaultDailyCheckins() {
+  return [
+    { key: 'G1MYT', label: 'G1MYT', range: '10:30 AM - 12:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+    { key: 'G2MYT', label: 'G2MYT', range: '12:00 PM - 2:15 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+    { key: 'G3MYT', label: 'G3MYT', range: '2:30 PM - 4:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+    { key: 'G4MYT', label: 'G4MYT', range: '4:00 PM - 5:35 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+  ];
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,6 +47,37 @@ export async function GET(req: NextRequest) {
 
     const match: any = { employeeId: new mongoose.Types.ObjectId(employeeId) };
     if (start && end) match.date = { $gte: start, $lte: end };
+
+    // If employee has attended today but no tracker exists, create it so admin sees daily records
+    const today = getISTDateStr();
+    const shouldEnsureToday =
+      (!start && !end) ||
+      (start && end && start <= today && end >= today);
+    if (shouldEnsureToday) {
+      const existingToday = await Tracker.findOne({ employeeId: match.employeeId, date: today });
+      if (!existingToday) {
+        const att = await Attendance.findOne({ employeeId: match.employeeId, date: today }).lean();
+        if (att) {
+          const empDoc = await User.findById(match.employeeId).select('role').lean() as any;
+          await Tracker.create({
+            employeeId: match.employeeId,
+            date: today,
+            role: empDoc?.role || 'employee',
+            initial: '',
+            onIt: '',
+            impact: '',
+            notes: '',
+            issues: '',
+            dailyCheckins: getDefaultDailyCheckins(),
+            submittedAt: null,
+            isSubmitted: false,
+            isEdited: false,
+            submissionStatus: 'pending',
+            completionScore: 0,
+          });
+        }
+      }
+    }
 
     const total = await Tracker.countDocuments(match);
     const rows = await Tracker.find(match).sort({ date: -1 })
