@@ -8,7 +8,7 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/constants';
 import { taskSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
 import { getISTDateStr } from '@/lib/attendance-utils';
-import { isSubAdmin, canAccessEmployee } from '@/lib/role-guards';
+import { isAdmin, isElevated, isSubAdmin, canAccessEmployee } from '@/lib/role-guards';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildSummary(tasks: any[]) {

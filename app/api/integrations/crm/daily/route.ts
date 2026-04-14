@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       const token = req.cookies.get(COOKIE_NAME)?.value;
       if (token) user = verifyToken(token);
     }
-    if (!user || !['admin', 'manager', 'sub_admin'].includes(user.role)) {
+    if (!user || !['admin', 'manager'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

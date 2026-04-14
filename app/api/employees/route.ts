@@ -20,9 +20,6 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
 
     const query: any = {};
-    if (user.role === 'manager') {
-      query.managerId = user.id;
-    }
     const [users, total] = await Promise.all([
       User.find(query, 'fullName email role createdAt teamName department jobRole').select('-profilePhoto').skip(skip).limit(limit),
       User.countDocuments(query),

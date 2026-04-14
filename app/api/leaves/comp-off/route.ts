@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await getAuthUser();
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!['admin', 'sub_admin', 'manager'].includes(auth.role)) {
+    if (!['admin', 'manager'].includes(auth.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

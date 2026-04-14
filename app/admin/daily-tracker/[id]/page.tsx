@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import AdminLayout from '@/components/admin-layout';
-import AdminWeeklyTrackerDetail from '@/components/admin-weekly-tracker-detail';
+import AdminWeeklyTrackerDetail from '@/components/admin-daily-tracker-detail';
 
 export default async function AdminWeeklyTrackerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthUser();

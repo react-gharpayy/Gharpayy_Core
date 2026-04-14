@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : new Date().getFullYear();
     const employeeIdParam = searchParams.get('employeeId');
 
-    const targetId = (auth.role === 'admin' || auth.role === 'sub_admin' || auth.role === 'manager') && employeeIdParam && mongoose.Types.ObjectId.isValid(employeeIdParam)
+    const targetId = (auth.role === 'admin' || auth.role === 'manager') && employeeIdParam && mongoose.Types.ObjectId.isValid(employeeIdParam)
       ? employeeIdParam
       : auth.id;
 
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const auth = await getAuthUser();
-    if (!auth || (auth.role !== 'admin' && auth.role !== 'sub_admin')) {
+    if (!auth || auth.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

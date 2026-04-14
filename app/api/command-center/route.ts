@@ -8,7 +8,7 @@ import Tracker from '@/models/Tracker';
 import '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr } from '@/lib/attendance-utils';
-import { isSubAdmin, buildEmployeeFilter } from '@/lib/role-guards';
+import { isAdmin, isElevated, buildEmployeeFilter } from '@/lib/role-guards';
 
 function fmtTime(d: Date) {
   return new Date(d).toLocaleTimeString('en-IN', {
@@ -25,18 +25,17 @@ function getISTDateDaysAgo(days: number) {
 export async function GET() {
   try {
     const user = await getAuthUser();
-    // sub_admin now allowed - was only admin|manager before
-    if (!user || !['admin', 'manager', 'sub_admin'].includes(user.role)) {
+    if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectDB();
     const today = getISTDateStr();
 
-    // Build employee filter - sub_admin sees only their team
+    // Build employee filter - manager sees only their team
     const empFilter = buildEmployeeFilter(user, { isApproved: true, role: 'employee' });
     if (empFilter === null) {
-      return NextResponse.json({ error: 'Unauthorized: no team assigned' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,15 +99,13 @@ export async function GET() {
       return (o[a.workMode] ?? 4) - (o[b.workMode] ?? 4);
     });
 
-    // Tasks - sub_admin sees only their team's tasks; manager sees their team employees
+    // Tasks - manager sees their team employees
     const taskSummary = { blocked: 0, overdue: 0, total: 0, completed: 0 };
     try {
       const taskFilter =
         user.role === 'manager'
           ? { assignedTo: { $in: employees.map(e => e._id) } }
-          : isSubAdmin(user) && user.assignedTeamId
-            ? { teamId: user.assignedTeamId }
-            : {};
+          : {};
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const tasks = await Task.find(taskFilter).lean() as any[];
       taskSummary.total     = tasks.length;
@@ -120,16 +117,10 @@ export async function GET() {
       taskSummary.completed = tasks.filter((t: any) => t.status === 'completed').length;
     } catch { /* ignore */ }
 
-    // Pending approvals - sub_admin sees only their team's exceptions; manager sees their team employees
+    // Pending approvals - manager sees only their team's exceptions
     let pendingApprovals = 0;
     try {
       if (user.role === 'manager') {
-        const teamEmployeeIds = employees.map(e => e._id);
-        pendingApprovals = await ExceptionRequest.countDocuments({
-          status: 'pending',
-          employeeId: { $in: teamEmployeeIds },
-        });
-      } else if (isSubAdmin(user) && user.assignedTeamId) {
         const teamEmployeeIds = employees.map(e => e._id);
         pendingApprovals = await ExceptionRequest.countDocuments({
           status: 'pending',
@@ -155,7 +146,7 @@ export async function GET() {
     }
 
     // Tracker compliance (all roles)
-    const trackerUsers = await User.find({ role: { $in: ['admin', 'sub_admin', 'manager', 'employee'] }, isApproved: { $ne: false } })
+    const trackerUsers = await User.find({ role: { $in: ['admin', 'manager', 'employee'] }, isApproved: { $ne: false } })
       .select('_id')
       .lean();
     const trackerIds = trackerUsers.map(u => u._id);

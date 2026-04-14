@@ -9,7 +9,7 @@ import { buildEmployeeFilter } from '@/lib/role-guards';
 export async function GET(req: NextRequest) {
   try {
     const auth = await getAuthUser();
-    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager' && auth.role !== 'sub_admin')) {
+    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -46,8 +46,8 @@ export async function GET(req: NextRequest) {
 
     let rows = employees.map(e => {
       const t = trackerMap.get(e._id.toString());
-      const rowStatus = t?.isSubmitted
-        ? (t.isEdited ? 'edited' : 'submitted')
+      const rowStatus = t
+        ? (t.isSubmitted ? (t.isEdited ? 'edited' : 'submitted') : 'pending')
         : 'missing';
       return {
         employeeId: e._id.toString(),

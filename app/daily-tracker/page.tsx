@@ -2,13 +2,13 @@ import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import AdminLayout from '@/components/admin-layout';
 import EmployeeSidebar from '@/components/employee-sidebar';
-import WeeklyTrackerEmployee from '@/components/weekly-tracker-employee';
+import WeeklyTrackerEmployee from '@/components/daily-tracker-employee';
 
 export default async function WeeklyTrackerPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
-  if (user.role === 'admin' || user.role === 'manager' || user.role === 'sub_admin') {
+  if (user.role === 'admin' || user.role === 'manager') {
     return <AdminLayout><WeeklyTrackerEmployee /></AdminLayout>;
   }
 

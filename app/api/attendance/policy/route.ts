@@ -86,7 +86,7 @@ export async function PUT(req: NextRequest) {
   try {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!['admin', 'sub_admin'].includes(user.role)) {
+    if (user.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden: admin only' }, { status: 403 });
     }
     if (!mongoose.Types.ObjectId.isValid(user.id)) {

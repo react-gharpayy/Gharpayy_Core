@@ -6,7 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 import mongoose from 'mongoose';
 import { exceptionSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
-import { isSubAdmin } from '@/lib/role-guards';
+import { isAdmin, isElevated, isSubAdmin } from '@/lib/role-guards';
 
 export async function GET(req: NextRequest) {
   try {

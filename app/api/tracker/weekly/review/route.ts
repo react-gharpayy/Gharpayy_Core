@@ -1,46 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import WeeklyTracker from '@/models/WeeklyTracker';
-import User from '@/models/User';
-import { buildEmployeeFilter } from '@/lib/role-guards';
+import Tracker from '@/models/Tracker';
+import mongoose from 'mongoose';
+
+function normalizeText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
 
 export async function PATCH(req: NextRequest) {
   try {
     const auth = await getAuthUser();
-    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager' && auth.role !== 'sub_admin')) {
+    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const { trackerId, isGoodWeek, adminNotes, adminImpact, adminIssues } = body || {};
-
+    const body = await req.json();
+    const trackerId = normalizeText(body.trackerId);
     if (!trackerId || !mongoose.Types.ObjectId.isValid(trackerId)) {
       return NextResponse.json({ error: 'Invalid trackerId' }, { status: 400 });
     }
 
     await connectDB();
-    const tracker = await WeeklyTracker.findById(trackerId);
-    if (!tracker) return NextResponse.json({ error: 'Tracker not found' }, { status: 404 });
-    if (tracker.status !== 'submitted') {
-      return NextResponse.json({ error: 'Only submitted weeks can be reviewed' }, { status: 400 });
-    }
-
-    if (auth.role === 'manager') {
-      const empFilter = buildEmployeeFilter(auth, { _id: tracker.employeeId });
-      if (empFilter === null) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      const allowed = await User.findOne(empFilter).select('_id').lean();
-      if (!allowed) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const tracker = await Tracker.findById(trackerId);
+    if (!tracker) {
+      return NextResponse.json({ error: 'Tracker record not found' }, { status: 404 });
     }
 
     tracker.status = 'reviewed';
-    tracker.isGoodWeek = !!isGoodWeek;
-    tracker.adminNotes = String(adminNotes || '');
-    tracker.adminImpact = String(adminImpact || '');
-    tracker.adminIssues = String(adminIssues || '');
+    tracker.isSubmitted = true;
+    tracker.submissionStatus = 'submitted';
+    tracker.adminNotes = normalizeText(body.adminNotes);
+    tracker.adminImpact = normalizeText(body.adminImpact);
+    tracker.adminIssues = normalizeText(body.adminIssues);
+    tracker.isGoodWeek = !!body.isGoodWeek;
     tracker.reviewedAt = new Date();
-    tracker.reviewedBy = new mongoose.Types.ObjectId(auth.id);
     await tracker.save();
 
     return NextResponse.json({ ok: true, tracker });
@@ -49,4 +43,3 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

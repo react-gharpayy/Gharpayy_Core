@@ -8,7 +8,7 @@ import { getCurrentWeekInfo } from '@/lib/week-utils';
 const NAV_ITEMS = [
   { label: 'My Attendance', href: '/home', icon: Clock },
   { label: 'Daily Updates', href: '/tracker', icon: ClipboardList },
-  { label: 'Daily Tracker', href: '/weekly-tracker', icon: ClipboardCheck },
+  { label: 'Daily Tracker', href: '/daily-tracker', icon: ClipboardCheck },
   { label: 'My Leaves', href: '/my-leaves', icon: Calendar },
   { label: 'My Tasks', href: '/my-tasks', icon: ClipboardList },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },
@@ -32,7 +32,6 @@ export default function EmployeeSidebar() {
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [noticeCount, setNoticeCount] = useState(0);
-  const [weeklyPending, setWeeklyPending] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -40,15 +39,6 @@ export default function EmployeeSidebar() {
       .then(r => r.json())
       .then(d => {
         if (d.id || d.email) setUser(d);
-      })
-      .catch(() => {});
-
-    const now = getCurrentWeekInfo();
-    fetch(`/api/tracker/weekly?year=${now.year}&week=${now.weekNumber}`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => {
-        const rec = Array.isArray(d.records) ? d.records[0] : null;
-        setWeeklyPending(!rec || rec.status === 'draft');
       })
       .catch(() => {});
   }, []);
@@ -78,7 +68,6 @@ export default function EmployeeSidebar() {
             {NAV_ITEMS.map(item => {
               const active = isActive(item.href);
               const isNotice = item.href === '/notices';
-              const isWeekly = item.href === '/weekly-tracker';
               return (
                 <button
                   key={item.href}
@@ -94,9 +83,6 @@ export default function EmployeeSidebar() {
                   <span className="text-sm font-medium flex-1">{item.label}</span>
                   {isNotice && noticeCount > 0 && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">{noticeCount}</span>
-                  )}
-                  {isWeekly && weeklyPending && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600">Pending</span>
                   )}
                 </button>
               );
@@ -159,7 +145,6 @@ export default function EmployeeSidebar() {
         <div className="md:hidden fixed top-[57px] left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
           {NAV_ITEMS.map(item => {
             const active = isActive(item.href);
-            const isWeekly = item.href === '/weekly-tracker';
             return (
               <button
                 key={item.href}
@@ -170,9 +155,6 @@ export default function EmployeeSidebar() {
               >
                 <item.icon className="w-4 h-4" />
                 {item.label}
-                {isWeekly && weeklyPending && (
-                  <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600">Pending</span>
-                )}
               </button>
             );
           })}
