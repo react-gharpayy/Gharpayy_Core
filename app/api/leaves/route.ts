@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const query: Record<string, any> = {};
-    if (user.role === 'employee' || user.role === 'sub_admin') {
+    if (user.role === 'employee') {
       query.employeeId = new mongoose.Types.ObjectId(user.id);
     } else if (employeeId && mongoose.Types.ObjectId.isValid(employeeId)) {
       query.employeeId = new mongoose.Types.ObjectId(employeeId);

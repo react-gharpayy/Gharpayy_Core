@@ -1,19 +1,15 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
-import PendingApprovalsBadge from '@/components/pending-approvals-badge';
-import EmployeeManager from '@/components/employee-manager';
 import AdminLayout from '@/components/admin-layout';
+import AdminApprovals from '@/components/admin-approvals';
 
-export default async function AdminPage() {
+export default async function EmployeeApprovalsPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
   if (user.role !== 'admin') redirect('/');
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <PendingApprovalsBadge />
-        <EmployeeManager />
-      </div>
+      <AdminApprovals />
     </AdminLayout>
   );
 }

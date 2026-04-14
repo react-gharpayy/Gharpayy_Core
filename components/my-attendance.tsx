@@ -37,10 +37,10 @@ export default function MyAttendance() {
   const timerRef = useRef<any>(null);
   const saveTimer = useRef<any>(null);
   const [checkins, setCheckins] = useState([
-    { key: 'G1MYT', label: 'G1MYT', range: '10:30 AM - 12:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
-    { key: 'G2MYT', label: 'G2MYT', range: '12:00 PM - 2:15 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
-    { key: 'G3MYT', label: 'G3MYT', range: '2:30 PM - 4:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
-    { key: 'G4MYT', label: 'G4MYT', range: '4:00 PM - 5:35 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '' },
+    { key: 'G1MYT', label: 'G1MYT', range: '10:30 AM - 12:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G2MYT', label: 'G2MYT', range: '12:00 PM - 2:15 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G3MYT', label: 'G3MYT', range: '2:30 PM - 4:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G4MYT', label: 'G4MYT', range: '4:00 PM - 5:35 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
   ]);
   const [history, setHistory] = useState<any[]>([]);
 
@@ -340,14 +340,100 @@ export default function MyAttendance() {
                     value={c.targetCount || 0}
                     onChange={(e) => updateCheckinField(c.key, { targetCount: Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-2"
-                    placeholder="Target count"
+                    placeholder="Leads target count"
                   />
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">MYT ADDED</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.mytAdded || 0}
+                        onChange={(e) => updateCheckinField(c.key, { mytAdded: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">TOURS IN PIPELINE</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.toursInPipeline || 0}
+                        onChange={(e) => updateCheckinField(c.key, { toursInPipeline: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">TOURS DONE</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.toursDone || 0}
+                        onChange={(e) => updateCheckinField(c.key, { toursDone: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">CALLS DONE</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.callsDone || 0}
+                        onChange={(e) => updateCheckinField(c.key, { callsDone: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">CONNECTED</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.connected || 0}
+                        onChange={(e) => updateCheckinField(c.key, { connected: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">WHO'LL PAY TODAY</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.mytWhoWillPayToday || 0}
+                        onChange={(e) => updateCheckinField(c.key, { mytWhoWillPayToday: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-[10px] text-gray-500 ml-1">Tenants Paid</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={c.tenantsPaid || 0}
+                      onChange={(e) => updateCheckinField(c.key, { tenantsPaid: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                    />
+                  </div>
                   <textarea
                     rows={2}
                     value={c.progressNote || ''}
                     onChange={(e) => updateCheckinField(c.key, { progressNote: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-2"
+                    placeholder="Called 30 leads , 20 picked,  4 coming to see , 2 want virtual tours."
+                  />
+                  <textarea
+                    rows={1}
+                    value={c.doubts || ''}
+                    onChange={(e) => updateCheckinField(c.key, { doubts: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-2"
+                    placeholder="DOUBTS"
+                  />
+                  <textarea
+                    rows={1}
+                    value={c.problems || ''}
+                    onChange={(e) => updateCheckinField(c.key, { problems: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-3"
-                    placeholder="Called 30 leads, 20 picked, 4 coming to see, 2 want virtual tours."
+                    placeholder="PROBLEMS"
                   />
                   {(c.startedAt || c.completedAt) && (
                     <div className="text-[10px] mb-3" style={{ color: '#6b7280' }}>

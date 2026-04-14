@@ -28,6 +28,7 @@ export function getWeekRange(year: number, weekNumber: number) {
   const start = new Date(firstMonday.getTime() + (safeWeek - 1) * 7 * DAY_MS);
   const end = new Date(start.getTime() + 6 * DAY_MS);
   return {
+    year,
     weekNumber: safeWeek,
     startDate: toDateStr(start),
     endDate: toDateStr(end),
@@ -54,6 +55,6 @@ export function getCurrentWeekInfo(date = new Date()) {
   const year = toIST(date).getUTCFullYear();
   const weekNumber = getCurrentWeekNumber(date);
   const range = getWeekRange(year, weekNumber);
-  return { year, ...range };
+  return range;
 }
 

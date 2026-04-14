@@ -33,9 +33,7 @@ export async function GET() {
 
     await connectDB();
 
-    const baseQuery = user.role === 'manager'
-      ? { $or: [{ _id: user.id }, { managerId: user.id, role: 'employee' }] }
-      : {};
+    const baseQuery = {};
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const users = await User.find(baseQuery, '-password')
@@ -107,10 +105,6 @@ export async function GET() {
         role:     m.role,
       })),
     ];
-
-    if (user.role === 'manager') {
-      tree = tree.filter(t => t._id === user.id);
-    }
 
     return NextResponse.json({
       ok: true,

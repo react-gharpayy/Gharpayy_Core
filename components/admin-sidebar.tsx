@@ -12,16 +12,14 @@ const NAV_ITEMS = [
   { label: 'Attendance Management', href: '/live-attendance', icon: Users },
   { label: 'Task Management Console', href: '/task-board', icon: ClipboardList },
   { label: 'Daily Updates', href: '/admin/tracker', icon: ClipboardList },
-  { label: 'Daily Tracker', href: '/admin/weekly-tracker', icon: ClipboardCheck },
+  { label: 'Daily Tracker', href: '/admin/daily-tracker', icon: ClipboardCheck },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },
   { label: 'Performance Analytics', href: '/kpis', icon: BarChart2 },
   { label: 'Team Hierarchy', href: '/team-hierarchy', icon: GitBranch },
   { label: 'Approval Center', href: '/approvals', icon: CheckSquare },
   { label: 'Reports', href: '/reports', icon: FileText },
   { label: 'Employee Management', href: '/admin', icon: Users },
-  { label: 'Settings', href: '/settings', icon: Settings },
-  { label: 'Shift Settings', href: '/shift-settings', icon: Settings },
-  { label: 'Attendance Policy', href: '/attendance-policy', icon: Settings },
+  { label: 'Settings', href: '/admin/settings', icon: Settings },
   { label: 'Holiday Calendar', href: '/holidays', icon: Calendar },
   { label: 'Employee Profile', href: '/employee-profile', icon: UserRound },
 ];
@@ -31,7 +29,7 @@ const MANAGER_ALLOWED = new Set([
   '/live-attendance',
   '/task-board',
   '/admin/tracker',
-  '/admin/weekly-tracker',
+  '/admin/daily-tracker',
   '/approvals',
   '/notices',
   '/team-hierarchy',
@@ -54,7 +52,6 @@ export default function AdminSidebar() {
   const [user, setUser] = useState<any>(null);
   const [noticeCount, setNoticeCount] = useState(0);
   const [approvalCount, setApprovalCount] = useState(0);
-  const [weeklyPending, setWeeklyPending] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -70,14 +67,6 @@ export default function AdminSidebar() {
         if (d.pendingCount !== undefined) setApprovalCount(d.pendingCount);
       })
       .catch(() => {});
-
-    const now = getCurrentWeekInfo();
-    fetch(`/api/tracker/weekly/analytics?year=${now.year}&week=${now.weekNumber}`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => {
-        if (d?.summary?.pendingReviews !== undefined) setWeeklyPending(d.summary.pendingReviews);
-      })
-      .catch(() => {});
   }, []);
 
   const logout = async () => {
@@ -91,7 +80,6 @@ export default function AdminSidebar() {
   const getBadge = (href: string) => {
     if (href === '/approvals') return approvalCount;
     if (href === '/notices') return noticeCount;
-    if (href === '/admin/weekly-tracker') return weeklyPending;
     return 0;
   };
 

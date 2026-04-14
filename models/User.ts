@@ -5,13 +5,11 @@ export interface IUser extends Document {
   email: string;
   password: string;
   // sub_admin added - DO NOT remove existing roles
-  role: 'admin' | 'sub_admin' | 'manager' | 'employee';
+  role: 'admin' | 'manager' | 'employee';
   dateOfBirth?: string;
   jobRole?: 'full-time' | 'intern';
   profilePhoto?: string;
   officeZoneId?: mongoose.Types.ObjectId;
-  // assignedTeamId: only used by sub_admin to scope their team
-  assignedTeamId?: mongoose.Types.ObjectId;
   isApproved?: boolean;
   managerId?: mongoose.Types.ObjectId;
   teamName?: string;
@@ -65,14 +63,11 @@ const UserSchema = new Schema({
   fullName:     { type: String, required: true, trim: true },
   email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
   password:     { type: String, required: true },
-  // sub_admin added to enum - existing users unaffected (MongoDB ignores enum on existing docs)
-  role:         { type: String, enum: ['admin', 'sub_admin', 'manager', 'employee'], default: 'employee' },
+  role:         { type: String, enum: ['admin', 'manager', 'employee'], default: 'employee' },
   dateOfBirth:  { type: String },
   jobRole:      { type: String, enum: ['full-time', 'intern'] },
   profilePhoto: { type: String },
   officeZoneId: { type: Schema.Types.ObjectId, ref: 'GpOfficeZone' },
-  // assignedTeamId: the OfficeZone this sub_admin is responsible for
-  assignedTeamId: { type: Schema.Types.ObjectId, ref: 'GpOfficeZone', default: null },
   isApproved:   { type: Boolean, default: false },
   managerId:    { type: Schema.Types.ObjectId, ref: 'GpAttUser', default: null },
   teamName:     { type: String, default: '' },

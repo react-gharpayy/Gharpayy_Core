@@ -29,7 +29,7 @@ function getWeekKey(dateStr: string) {
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const auth = await getAuthUser();
-    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager' && auth.role !== 'sub_admin')) {
+    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

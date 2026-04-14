@@ -8,7 +8,7 @@ export default async function TrackerPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
 
-  if (user.role === 'admin' || user.role === 'manager' || user.role === 'sub_admin') {
+  if (user.role === 'admin' || user.role === 'manager') {
     return <AdminLayout><EmployeeTracker /></AdminLayout>;
   }
 

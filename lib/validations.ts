@@ -76,18 +76,4 @@ export const orgUpdateSchema = z.object({
 });
 
 
-// ─── Sub-Admin Creation ────────────────────────────────────────────────────
-// Schema for POST /api/admin/create-subadmin
-// Only callable by role === 'admin'
-export const createSubAdminSchema = z.object({
-  fullName: z.string().min(1).max(100).trim(),
-  email:    z.string().email().max(255).trim(),
-  password: z.string().min(8).max(128),
-  teamId:   z.string().min(1, 'teamId (OfficeZone ObjectId) is required'),
-});
 
-// Schema for PATCH /api/admin/create-subadmin (reassign team)
-export const updateSubAdminSchema = z.object({
-  subAdminId: z.string().min(1),
-  teamId:     z.string().min(1),
-});

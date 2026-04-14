@@ -51,9 +51,6 @@ export async function POST(req: NextRequest) {
       fullName: user.fullName,
       role: user.role,
     };
-    if (user.role === 'sub_admin' && user.assignedTeamId) {
-      payload.assignedTeamId = user.assignedTeamId.toString();
-    }
 
     const loginToken = jwt.sign(payload, INTEGRATION_JWT_SECRET, { expiresIn: '5m' });
     return NextResponse.json({ ok: true, loginToken });

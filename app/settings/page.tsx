@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import AdminLayout from '@/components/admin-layout';
 import EmployeeSidebar from '@/components/employee-sidebar';
 import WorkScheduleSettings from '@/components/work-schedule-settings';
-import WeeklyTrackerSettings from '@/components/weekly-tracker-settings';
+import WeeklyTrackerSettings from '@/components/daily-tracker-settings';
 import CrmIntegrationSettings from '@/components/crm-integration-settings';
 
 export default async function SettingsPage() {
@@ -15,15 +15,7 @@ export default async function SettingsPage() {
   }
 
   if (user.role === 'admin') {
-    return (
-      <AdminLayout>
-        <div className="space-y-4">
-          <WorkScheduleSettings />
-          <WeeklyTrackerSettings />
-          <CrmIntegrationSettings />
-        </div>
-      </AdminLayout>
-    );
+    redirect('/admin/settings?tab=general');
   }
 
   return (

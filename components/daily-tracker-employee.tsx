@@ -15,6 +15,10 @@ const EMPTY_FORM = {
   manualToursToday: 0,
 };
 
+function getWeekInfoFromDate(dateStr: string) {
+  return getCurrentWeekInfo(new Date(`${dateStr}T00:00:00.000Z`));
+}
+
 export default function WeeklyTrackerEmployee() {
   const now = useMemo(() => getCurrentWeekInfo(), []);
   const [year, setYear] = useState(now.year);
@@ -32,7 +36,7 @@ export default function WeeklyTrackerEmployee() {
 
   const isCurrentWeek = year === now.year && weekNumber === now.weekNumber;
   const isFutureWeek = year > now.year || (year === now.year && weekNumber > now.weekNumber);
-  const status = tracker?.status || 'draft';
+  const status = tracker?.status || (tracker?.isSubmitted ? 'submitted' : 'draft');
   const canEdit = !isFutureWeek && status !== 'reviewed' && (status === 'draft' || isCurrentWeek);
 
   useEffect(() => {
@@ -42,10 +46,10 @@ export default function WeeklyTrackerEmployee() {
   const loadWeek = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/tracker/weekly?year=${year}&week=${weekNumber}`, { cache: 'no-store' });
+      const r = await fetch('/api/tracker/today', { cache: 'no-store' });
       const d = await r.json();
       if (d.ok) {
-        const rec = Array.isArray(d.records) ? d.records[0] : null;
+        const rec = d.tracker || null;
         setTracker(rec || null);
         if (rec) {
           setForm({
@@ -70,9 +74,38 @@ export default function WeeklyTrackerEmployee() {
 
   const loadHistory = async () => {
     try {
-      const r = await fetch(`/api/tracker/weekly?year=${year}`, { cache: 'no-store' });
+      const start = `${year}-01-01`;
+      const end = `${year}-12-31`;
+      const r = await fetch(`/api/tracker/history?start=${start}&end=${end}&limit=200`, { cache: 'no-store' });
       const d = await r.json();
-      if (d.ok) setHistory(d.records || []);
+      if (d.ok) {
+        const weeklyMap: Record<string, any> = {};
+        (d.records || []).forEach((rec: any) => {
+          const weekInfo = getWeekInfoFromDate(rec.date);
+          const key = `${weekInfo.year}-W${String(weekInfo.weekNumber).padStart(2, '0')}`;
+          if (!weeklyMap[key]) {
+            weeklyMap[key] = {
+              _id: key,
+              weekNumber: weekInfo.weekNumber,
+              weekStartDate: weekInfo.startDate,
+              weekEndDate: weekInfo.endDate,
+              status: 'draft',
+              submittedDays: 0,
+              totalDays: 0,
+            };
+          }
+          weeklyMap[key].totalDays += 1;
+          if (rec.status === 'reviewed') {
+            weeklyMap[key].status = 'reviewed';
+          } else if (rec.isSubmitted) {
+            weeklyMap[key].status = 'submitted';
+            weeklyMap[key].submittedDays += 1;
+          }
+        });
+        setHistory(Object.values(weeklyMap).sort((a, b) => b.weekNumber - a.weekNumber));
+      } else {
+        setHistory([]);
+      }
     } catch {
       setHistory([]);
     }
@@ -87,8 +120,11 @@ export default function WeeklyTrackerEmployee() {
     setSaving(true);
     setMsg(null);
     try {
-      const payload = { year, weekNumber, ...form, status: nextStatus };
-      const r = await fetch('/api/tracker/weekly', {
+      const payload = {
+        ...form,
+        submit: nextStatus === 'submitted',
+      };
+      const r = await fetch('/api/tracker/today', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -183,37 +219,7 @@ export default function WeeklyTrackerEmployee() {
         <div style={card} className="p-5 text-xs text-gray-500">Loading weekly tracker...</div>
       ) : (
         <>
-          <div style={card} className="p-5 space-y-4">
-            <button onClick={() => setOpenMetrics(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">
-              Weekly Metrics
-              {openMetrics ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {openMetrics && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {[
-                  { key: 'drafts30', label: '30 DRAFTS?' },
-                  { key: 'mytAdded', label: 'MYT ADDED' },
-                  { key: 'toursPipeline', label: 'TOURS IN PIPELINE' },
-                  { key: 'toursDone', label: 'TOURS DONE' },
-                  { key: 'callsDone', label: 'CALLS DONE' },
-                  { key: 'connected', label: 'CONNECTED' },
-                ].map((f) => (
-                  <div key={f.key}>
-                    <label className="block text-xs text-gray-700 mb-1.5">{f.label}</label>
-                    <input
-                      type="number"
-                      min={0}
-                      disabled={!canEdit}
-                      value={form[f.key] ?? 0}
-                      onChange={(e) => setForm((p: any) => ({ ...p, [f.key]: Number(e.target.value) }))}
-                      className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
-                      style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+
 
           <div style={card} className="p-5 space-y-4">
             <button onClick={() => setOpenDailyKpis(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-900">

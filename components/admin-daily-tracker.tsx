@@ -142,7 +142,6 @@ export default function AdminWeeklyTracker() {
             <option value="">All</option>
             <option value="employee">Employee</option>
             <option value="manager">Manager</option>
-            <option value="sub_admin">Sub-admin</option>
             <option value="admin">Admin</option>
           </select>
         </div>
@@ -295,7 +294,7 @@ export default function AdminWeeklyTracker() {
                 }`}>{r.status}</div>
                 <div className="text-right">
                   <button
-                    onClick={() => router.push(`/admin/weekly-tracker/${r.employeeId}?year=${filters.year}&week=${filters.week}`)}
+                    onClick={() => router.push(`/admin/daily-tracker/${r.employeeId}?year=${filters.year}&week=${filters.week}`)}
                     className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-100"
                   >
                     {r.status === 'submitted' ? 'Review' : 'View'}

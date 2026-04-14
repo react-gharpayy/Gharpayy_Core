@@ -28,8 +28,7 @@ function fmtMins(m: number) {
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    // sub_admin now allowed - was only admin|manager
-    if (!user || !['admin', 'manager', 'sub_admin'].includes(user.role)) {
+    if (!user || !['admin', 'manager'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -42,11 +41,6 @@ export async function GET(req: NextRequest) {
     if (!emp) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     if (user.role === 'manager' && emp.managerId?.toString() !== user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    // sub_admin: verify the employee belongs to their team before returning any data
-    if (!canAccessEmployee(user, emp.officeZoneId?.toString())) {
-      return NextResponse.json({ error: 'Access denied: employee is not in your team' }, { status: 403 });
     }
 
     const today = getISTDateStr();

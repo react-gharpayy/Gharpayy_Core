@@ -17,7 +17,7 @@ function dateDaysAgo(days: number) {
 export async function GET() {
   try {
     const auth = await getAuthUser();
-    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager' && auth.role !== 'sub_admin')) {
+    if (!auth || (auth.role !== 'admin' && auth.role !== 'manager')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

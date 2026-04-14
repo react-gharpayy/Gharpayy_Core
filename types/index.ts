@@ -2,9 +2,7 @@ export interface AuthPayload {
   id: string;
   email: string;
   fullName: string;
-  // sub_admin added to role union — DO NOT remove existing roles
-  role: 'admin' | 'sub_admin' | 'manager' | 'employee';
-  /** Populated only for sub_admin — the OfficeZone ObjectId they manage */
+  role: 'admin' | 'manager' | 'employee' | 'sub_admin';
   assignedTeamId?: string;
 }
 

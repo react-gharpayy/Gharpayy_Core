@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await getAuthUser();
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (auth.role !== 'admin' && auth.role !== 'sub_admin') {
+    if (auth.role !== 'admin' && auth.role !== 'manager') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -74,7 +74,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const auth = await getAuthUser();
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (auth.role !== 'admin' && auth.role !== 'sub_admin') {
+    if (auth.role !== 'admin' && auth.role !== 'manager') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
