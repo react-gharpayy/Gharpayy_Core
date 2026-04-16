@@ -55,10 +55,6 @@ export async function GET(req: NextRequest) {
     const query: any = {};
     if (user.role === 'employee') {
       query.assignedTo = user.id;
-    } else if (user.role === 'manager') {
-      const teamEmployees = await User.find({ managerId: user.id, role: 'employee' }, '_id').lean();
-      const teamIds = teamEmployees.map(e => e._id);
-      query.assignedTo = { $in: teamIds };
     } else if (isSubAdmin(user) && user.assignedTeamId) {
       // sub_admin sees only tasks for their team
       query.teamId = user.assignedTeamId;
@@ -108,13 +104,6 @@ export async function POST(req: NextRequest) {
     const assignee = await User.findById(assignedTo).populate('officeZoneId', 'name').lean() as any;
     if (!assignee) return NextResponse.json({ error: 'Assignee not found' }, { status: 404 });
 
-    // manager: enforce that assignee belongs to their team
-    if (user.role === 'manager') {
-      if (assignee.managerId?.toString() !== user.id) {
-        return NextResponse.json({ error: 'Cannot assign task to employee outside your team' }, { status: 403 });
-      }
-    }
-
     // sub_admin: enforce that assignee belongs to their team
     if (isSubAdmin(user) && user.role !== 'manager') {
       const zoneId = assignee.officeZoneId?._id?.toString() || assignee.officeZoneId?.toString();
@@ -156,15 +145,6 @@ export async function PATCH(req: NextRequest) {
     // employee: can only update their own tasks (unchanged)
     if (user.role === 'employee' && task.assignedTo.toString() !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // manager: can only update tasks in their team
-    if (user.role === 'manager') {
-      const teamEmployees = await User.find({ managerId: user.id, role: 'employee' }, '_id').lean() as { _id: { toString: () => string } }[];
-      const teamIds = teamEmployees.map(e => e._id.toString());
-      if (!teamIds.includes(task.assignedTo.toString())) {
-        return NextResponse.json({ error: 'Cannot update task outside your team' }, { status: 403 });
-      }
     }
 
     // sub_admin: can only update tasks in their team

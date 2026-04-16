@@ -19,13 +19,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (!leave) return NextResponse.json({ error: 'Leave not found' }, { status: 404 });
     if (leave.status !== 'pending') return NextResponse.json({ error: 'Leave already processed' }, { status: 400 });
 
-    if (auth.role === 'manager') {
-      const emp = await User.findById(leave.employeeId).select('managerId').lean() as any;
-      if (!emp || emp.managerId?.toString?.() !== auth.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
-    }
-
     leave.status = 'rejected';
     leave.rejectedAt = new Date();
     leave.rejectedBy = auth.id;

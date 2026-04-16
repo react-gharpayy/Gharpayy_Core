@@ -44,9 +44,6 @@ export async function POST(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const emp = await User.findById(employeeId).lean() as any;
     if (!emp) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
-    if (user.role === 'manager' && emp.managerId?.toString?.() !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
 
     const inDate = toDateInIST(date, clockIn);
     const outDate = toDateInIST(date, clockOut);

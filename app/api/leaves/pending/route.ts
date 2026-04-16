@@ -12,12 +12,6 @@ export async function GET(req: NextRequest) {
     await connectDB();
     let query: any = { status: 'pending' };
 
-    if (auth.role === 'manager') {
-      const teamEmployees = await User.find({ managerId: auth.id, role: 'employee' }, '_id').lean() as { _id: { toString: () => string } }[];
-      const ids = teamEmployees.map(e => e._id);
-      query = { ...query, employeeId: { $in: ids } };
-    }
-
     const leaves = await Leave.find(query).sort({ appliedAt: -1 }).lean();
     return NextResponse.json({ ok: true, leaves });
   } catch (e: unknown) {

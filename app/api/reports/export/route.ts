@@ -20,6 +20,15 @@ function toCSV(headers: string[], rows: any[][]) {
   return [headers.join(','), ...rows.map(r => r.map(csvEscape).join(','))].join('\n');
 }
 
+async function getUserMap(ids: string[]) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean).map(String)));
+  if (!uniqueIds.length) return new Map<string, any>();
+  const users = await User.find({ _id: { $in: uniqueIds } })
+    .select('fullName')
+    .lean() as any[];
+  return new Map(users.map(u => [String(u._id), u]));
+}
+
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -41,9 +50,13 @@ export async function GET(req: NextRequest) {
     if (type === 'daily_attendance') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = await Attendance.find({ date: today }).lean() as any[];
+      const userMap = await getUserMap(rows.map(r => String(r.employeeId)));
       content = toCSV(
-        ['employeeId', 'date', 'dayStatus', 'workMode', 'isCheckedIn', 'totalWorkMins', 'totalBreakMins', 'lateByMins', 'earlyByMins'],
-        rows.map(r => [r.employeeId, r.date, r.dayStatus, r.workMode || '', !!r.isCheckedIn, r.totalWorkMins || 0, r.totalBreakMins || 0, r.lateByMins || 0, r.earlyByMins || 0]),
+        ['employeeName', 'date', 'dayStatus', 'workMode', 'isCheckedIn', 'totalWorkMins', 'totalBreakMins', 'lateByMins', 'earlyByMins'],
+        rows.map(r => {
+          const u = userMap.get(String(r.employeeId));
+          return [u?.fullName || '', r.date, r.dayStatus, r.workMode || '', !!r.isCheckedIn, r.totalWorkMins || 0, r.totalBreakMins || 0, r.lateByMins || 0, r.earlyByMins || 0];
+        }),
       );
     } else if (type === 'daily_breaks') {
       const reportDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
@@ -148,25 +161,37 @@ export async function GET(req: NextRequest) {
     } else if (type === 'break_violations') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = await Attendance.find({ date: today, totalBreakMins: { $gt: BREAK_LIMIT_MINS } }).lean() as any[];
+      const userMap = await getUserMap(rows.map(r => String(r.employeeId)));
       content = toCSV(
-        ['employeeId', 'date', 'totalBreakMins', 'status'],
-        rows.map(r => [r.employeeId, r.date, r.totalBreakMins || 0, 'violation']),
+        ['employeeName', 'date', 'totalBreakMins', 'status'],
+        rows.map(r => {
+          const u = userMap.get(String(r.employeeId));
+          return [u?.fullName || '', r.date, r.totalBreakMins || 0, 'violation'];
+        }),
       );
     } else if (type === 'geo_compliance') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = await Attendance.find({ date: today }).lean() as any[];
+      const userMap = await getUserMap(rows.map(r => String(r.employeeId)));
       content = toCSV(
-        ['employeeId', 'date', 'sessionIndex', 'type', 'lat', 'lng'],
+        ['employeeName', 'date', 'sessionIndex', 'type', 'lat', 'lng'],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        rows.flatMap((r: any) => (r.sessions || []).map((s: any, i: number) => [r.employeeId, r.date, i + 1, s.type || 'work', s.lat ?? '', s.lng ?? ''])),
+        rows.flatMap((r: any) => {
+          const u = userMap.get(String(r.employeeId));
+          return (r.sessions || []).map((s: any, i: number) => [u?.fullName || '', r.date, i + 1, s.type || 'work', s.lat ?? '', s.lng ?? '']);
+        }),
       );
     } else if (type === 'monthly_attendance') {
       const ym = month && /^\d{4}-\d{2}$/.test(month) ? month : today.slice(0, 7);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = await Attendance.find({ date: { $gte: `${ym}-01`, $lte: `${ym}-31` } }).lean() as any[];
+      const userMap = await getUserMap(rows.map(r => String(r.employeeId)));
       content = toCSV(
-        ['employeeId', 'date', 'dayStatus', 'totalWorkMins', 'totalBreakMins', 'lateByMins', 'earlyByMins'],
-        rows.map(r => [r.employeeId, r.date, r.dayStatus, r.totalWorkMins || 0, r.totalBreakMins || 0, r.lateByMins || 0, r.earlyByMins || 0]),
+        ['employeeName', 'date', 'dayStatus', 'totalWorkMins', 'totalBreakMins', 'lateByMins', 'earlyByMins'],
+        rows.map(r => {
+          const u = userMap.get(String(r.employeeId));
+          return [u?.fullName || '', r.date, r.dayStatus, r.totalWorkMins || 0, r.totalBreakMins || 0, r.lateByMins || 0, r.earlyByMins || 0];
+        }),
       );
     } else {
       return NextResponse.json({ error: 'Unsupported report type' }, { status: 400 });

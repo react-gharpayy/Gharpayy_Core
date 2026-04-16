@@ -34,14 +34,6 @@ export async function GET(req: NextRequest) {
     await connectDB();
     const range = start && end ? { start, end } : (month ? getMonthRange(month || undefined) : null);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (user.role === 'manager' && employeeId !== user.id) {
-      const emp = await User.findById(employeeId).select('managerId').lean() as any;
-      if (!emp || emp.managerId?.toString() !== user.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
-    }
-
     const match: any = { employeeId };
     if (range) match.date = { $gte: range.start, $lte: range.end };
     if (status) match.dayStatus = status;

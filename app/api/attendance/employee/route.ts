@@ -39,9 +39,6 @@ export async function GET(req: NextRequest) {
     await connectDB();
     const emp = await User.findById(employeeId);
     if (!emp) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
-    if (user.role === 'manager' && emp.managerId?.toString() !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
 
     const today = getISTDateStr();
     const att   = await Attendance.findOne({ employeeId, date: today });
