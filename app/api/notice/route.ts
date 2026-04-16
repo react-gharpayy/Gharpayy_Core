@@ -19,19 +19,7 @@ export async function GET() {
 
     let notices;
     if (isManager) {
-      if (user.role === 'manager') {
-        const teamEmployees = await User.find({ managerId: user.id, role: 'employee' }, '_id').lean() as { _id: { toString: () => string } }[];
-        const teamIds = teamEmployees.map(e => e._id.toString());
-        notices = await Notice.find({
-          $or: [
-            { targetId: null },
-            { targetId: { $in: teamIds } },
-            { createdBy: user.id },
-          ],
-        }).sort({ createdAt: -1 }).limit(NOTICE_LIMIT);
-      } else {
-        notices = await Notice.find({}).sort({ createdAt: -1 }).limit(NOTICE_LIMIT);
-      }
+      notices = await Notice.find({}).sort({ createdAt: -1 }).limit(NOTICE_LIMIT);
     } else {
       // Employees see notices targeting them or all employees
       notices = await Notice.find({
@@ -95,9 +83,6 @@ export async function POST(req: NextRequest) {
     let targetName = null;
     if (targetId) {
       const target = await User.findById(targetId);
-      if (user.role === 'manager' && target?.managerId?.toString() !== user.id) {
-        return NextResponse.json({ error: 'Cannot create notice outside your team' }, { status: 403 });
-      }
       targetName = target?.fullName || null;
     }
 

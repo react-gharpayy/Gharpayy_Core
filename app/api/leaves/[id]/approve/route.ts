@@ -20,13 +20,6 @@ export async function POST(_: NextRequest, ctx: { params: Promise<{ id: string }
     if (!leave) return NextResponse.json({ error: 'Leave not found' }, { status: 404 });
     if (leave.status !== 'pending') return NextResponse.json({ error: 'Leave already processed' }, { status: 400 });
 
-    if (auth.role === 'manager') {
-      const emp = await User.findById(leave.employeeId).select('managerId').lean() as any;
-      if (!emp || emp.managerId?.toString?.() !== auth.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
-    }
-
     const balance = await ensureLeaveBalance(String(leave.employeeId)) as any;
     const days = Number((leave as any).totalDays || 0);
     const type = (leave as any).leaveType as string | undefined;

@@ -23,13 +23,6 @@ export async function GET(req: NextRequest) {
     if (user.role === 'employee' && mongoose.Types.ObjectId.isValid(user.id)) {
       // Employee: only their own exceptions (unchanged)
       query.employeeId = new mongoose.Types.ObjectId(user.id);
-    } else if (user.role === 'manager') {
-      const teamEmployees = await User.find(
-        { managerId: user.id, role: 'employee', isApproved: true },
-        '_id'
-      ).lean();
-      const teamIds = teamEmployees.map(e => e._id);
-      query.employeeId = { $in: teamIds };
     } else if (isSubAdmin(user) && user.assignedTeamId) {
       // sub_admin: only exceptions from their team's employees
       const teamEmployees = await User.find(

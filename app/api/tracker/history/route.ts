@@ -38,12 +38,6 @@ export async function GET(req: NextRequest) {
     }
 
     await connectDB();
-    if (auth.role === 'manager' && employeeId !== auth.id) {
-      const emp = await User.findById(employeeId).select('managerId').lean() as any;
-      if (!emp || emp.managerId?.toString() !== auth.id) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
-    }
 
     const match: any = { employeeId: new mongoose.Types.ObjectId(employeeId) };
     if (start && end) match.date = { $gte: start, $lte: end };

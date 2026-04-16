@@ -33,7 +33,7 @@ export async function GET() {
     const today = getISTDateStr();
 
     // Build employee filter - manager sees only their team
-    const empFilter = buildEmployeeFilter(user, { isApproved: true, role: 'employee' });
+    const empFilter = buildEmployeeFilter(user, { isApproved: { $ne: false }, role: 'employee' });
     if (empFilter === null) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

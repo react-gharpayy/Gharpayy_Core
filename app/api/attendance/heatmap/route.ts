@@ -108,9 +108,7 @@ export async function GET(req: NextRequest) {
     if (isManager) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userQuery: any = {};
-      if (user.role === 'manager') {
-        userQuery.managerId = user.id;
-      } else {
+      if (user.role !== 'manager') {
         if (teamId) userQuery.officeZoneId = teamId;
         if (managerId) userQuery.managerId = managerId;
       }

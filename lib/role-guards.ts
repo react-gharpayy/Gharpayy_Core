@@ -25,7 +25,7 @@ export function isSubAdmin(user: AuthPayload): boolean {
  * Builds a MongoDB employee filter scoped to the caller's role.
  *
  * - admin             => returns base filter (sees everyone)
- * - manager           => adds managerId constraint (team only)
+ * - manager           => returns base filter (sees everyone like admin)
  * - employee          => returns null (not allowed to query employees)
  *
  * @param user   Decoded JWT payload
@@ -43,9 +43,9 @@ export function buildEmployeeFilter(
     return base;
   }
 
-  // manager - restricted to their team
+  // manager - unrestricted visibility like admin
   if (user.role === 'manager') {
-    return { ...base, managerId: user.id };
+    return base;
   }
 
   return base;
