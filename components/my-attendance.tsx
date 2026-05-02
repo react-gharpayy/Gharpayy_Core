@@ -47,7 +47,7 @@ export default function MyAttendance() {
   const [history, setHistory] = useState<any[]>([]);
 
   const fetchStatus = () => {
-    fetch('/api/attendance/status', { cache: 'no-store' })
+    return fetch('/api/attendance/status', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { setAtt(d); })
       .catch(() => {})
@@ -134,7 +134,7 @@ export default function MyAttendance() {
       const d = await r.json();
       
       if (d.ok || d.success) {
-        flash(getSuccessMsg(body), true);
+        flash(getSuccessMsg(body, endpoint), true);
         await fetchStatus();
       } else {
         flash(d.error || 'Verification failed.', false);
@@ -173,7 +173,8 @@ export default function MyAttendance() {
     }
   };
 
-  const getSuccessMsg = (body: any) => {
+  const getSuccessMsg = (body: any, endpoint: string) => {
+    if (endpoint.includes('checkout') && !body.type) return 'Clocked out successfully';
     if (!body.type) return 'Clocked in successfully';
     if (body.type === 'break_start') return 'Break started';
     if (body.type === 'break_end') return 'Break ended - welcome back';
