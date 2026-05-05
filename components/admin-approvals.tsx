@@ -38,8 +38,13 @@ export default function AdminApprovals() {
       const status = activeTab === 'pending' ? 'pending' : 'approved';
       const res = await fetch(`/api/employees/approvals?status=${status}`);
       const data = await res.json();
-      if (data.ok) setEmployees(data.employees);
-      setError('');
+      if (data.ok) {
+        setEmployees(data.employees);
+        setError('');
+      } else {
+        setEmployees([]);
+        setError(data?.error || 'Failed to fetch employees');
+      }
     } catch {
       setError('Failed to fetch employees');
     } finally {
@@ -70,6 +75,9 @@ export default function AdminApprovals() {
       });
       if (res.ok) {
         setEmployees(e => e.filter(emp => emp._id !== employeeId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || 'Failed to approve');
       }
     } catch {
       alert('Failed to approve');
@@ -89,6 +97,9 @@ export default function AdminApprovals() {
       });
       if (res.ok) {
         setEmployees(e => e.filter(emp => emp._id !== employeeId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || 'Failed to reject');
       }
     } catch {
       alert('Failed to reject');
