@@ -6,7 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 import mongoose from 'mongoose';
 import { exceptionSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
-import { isSubAdmin } from '@/lib/role-guards';
+import { isAdmin, isElevated, isSubAdmin } from '@/lib/role-guards';
 
 export async function GET(req: NextRequest) {
   try {
@@ -96,8 +96,20 @@ export async function PATCH(req: NextRequest) {
 
     await connectDB();
 
+    // manager: verify exception belongs to their team
+    if (user.role === 'manager') {
+      const exc = await ExceptionRequest.findById(exceptionId).lean();
+      if (!exc) return NextResponse.json({ error: 'Exception not found' }, { status: 404 });
+      const emp = await User.findById((exc as any).employeeId).lean();
+      if (!emp) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+      const mgr = (emp as any).managerId?.toString();
+      if (mgr !== user.id) {
+        return NextResponse.json({ error: 'Cannot approve exception outside your team' }, { status: 403 });
+      }
+    }
+
     // sub_admin: verify the exception belongs to one of their team's employees
-    if (isSubAdmin(user) && user.assignedTeamId) {
+    if (isSubAdmin(user) && user.role !== 'manager' && user.assignedTeamId) {
       const exc = await ExceptionRequest.findById(exceptionId).lean();
       if (!exc) return NextResponse.json({ error: 'Exception not found' }, { status: 404 });
 
@@ -124,6 +136,7 @@ export async function PATCH(req: NextRequest) {
       { new: true }
     );
     if (!exc) return NextResponse.json({ error: 'Exception not found' }, { status: 404 });
+
     return NextResponse.json({ ok: true, exception: exc });
   } catch (e: unknown) {
     console.error('API error:', e);

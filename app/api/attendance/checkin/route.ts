@@ -6,10 +6,13 @@ import {
   autoCloseMissedClockOut,
   getISTDateStr,
   getShiftRules,
+  applyUserSchedule,
   getStatusByShiftRules,
   recomputeAttendanceTotals,
 } from '@/lib/attendance-utils';
 import { notifyLateAlert } from '@/lib/system-notifications';
+import User from '@/models/User';
+import Tracker from '@/models/Tracker';
 
 function fmtISTTimeLabel(date: Date) {
   return new Date(date).toLocaleTimeString('en-IN', {
@@ -18,6 +21,15 @@ function fmtISTTimeLabel(date: Date) {
     hour12: true,
     timeZone: 'Asia/Kolkata',
   });
+}
+
+function getDefaultDailyCheckins() {
+  return [
+    { key: 'G1MYT', label: 'G1MYT', range: '10:30 AM - 12:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G2MYT', label: 'G2MYT', range: '12:00 PM - 2:15 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G3MYT', label: 'G3MYT', range: '2:30 PM - 4:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G4MYT', label: 'G4MYT', range: '4:00 PM - 5:35 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+  ];
 }
 
 export async function POST(req: NextRequest) {
@@ -29,9 +41,37 @@ export async function POST(req: NextRequest) {
     const { lat, lng, type } = await req.json().catch(() => ({ lat: null, lng: null, type: null }));
     await connectDB();
     await autoCloseMissedClockOut(user.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dbUser = await User.findById(user.id).select('workSchedule').lean() as any;
+    const baseRules = await getShiftRules();
+    const rules = applyUserSchedule(baseRules, dbUser?.workSchedule);
 
     const date = getISTDateStr();
     let att = await Attendance.findOne({ employeeId: user.id, date });
+
+    // Ensure daily tracker record exists once employee clocks in
+    const existingTracker = await Tracker.findOne({ employeeId: user.id, date });
+    if (!existingTracker) {
+      await Tracker.create({
+        employeeId: user.id,
+        date,
+        role: user.role,
+        initial: '',
+        onIt: '',
+        impact: '',
+        notes: '',
+        issues: '',
+        dailyCheckins: getDefaultDailyCheckins(),
+        submittedAt: null,
+        isSubmitted: false,
+        isEdited: false,
+        submissionStatus: 'pending',
+        completionScore: 0,
+      });
+    } else if (!Array.isArray(existingTracker.dailyCheckins) || existingTracker.dailyCheckins.length === 0) {
+      existingTracker.dailyCheckins = getDefaultDailyCheckins();
+      await existingTracker.save();
+    }
 
     const now = new Date();
     const sessionType = type === 'field_return' ? 'field' : 'work';
@@ -78,7 +118,6 @@ export async function POST(req: NextRequest) {
     if (att?.isInField) return NextResponse.json({ error: 'Field visit active. Return first.' }, { status: 400 });
 
     if (!att) {
-      const rules = await getShiftRules();
       const status = getStatusByShiftRules(now, rules);
       att = new Attendance({
         employeeId: user.id,
@@ -99,7 +138,6 @@ export async function POST(req: NextRequest) {
       att.isCheckedIn = true;
       att.workMode = 'Present';
       if (att.sessions.length === 1) {
-        const rules = await getShiftRules();
         const status = getStatusByShiftRules(now, rules);
         att.dayStatus = status.dayStatus;
         att.lateByMins = status.lateByMins;
@@ -112,7 +150,6 @@ export async function POST(req: NextRequest) {
     await att.save();
 
     if (att.dayStatus === 'Late') {
-      const rules = await getShiftRules();
       await notifyLateAlert({
         employeeId: user.id,
         employeeName: user.fullName || user.email || 'Employee',

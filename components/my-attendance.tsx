@@ -32,10 +32,17 @@ export default function MyAttendance() {
   const [att, setAtt] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [clocking, setClocking] = useState(false);
-  const [leaveSaving, setLeaveSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<any>(null);
+  const saveTimer = useRef<any>(null);
+  const [checkins, setCheckins] = useState([
+    { key: 'G1MYT', label: 'G1MYT', range: '10:30 AM - 12:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G2MYT', label: 'G2MYT', range: '12:00 PM - 2:15 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G3MYT', label: 'G3MYT', range: '2:30 PM - 4:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+    { key: 'G4MYT', label: 'G4MYT', range: '4:00 PM - 5:35 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
+  ]);
+  const [history, setHistory] = useState<any[]>([]);
 
   const fetchStatus = () => {
     fetch('/api/attendance/status', { cache: 'no-store' })
@@ -49,6 +56,22 @@ export default function MyAttendance() {
     fetchStatus();
     const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
+  }, []);
+  useEffect(() => {
+    fetch('/api/tracker/today', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (d?.tracker?.dailyCheckins?.length) {
+          setCheckins(d.tracker.dailyCheckins);
+        }
+      })
+      .catch(() => {});
+    fetch('/api/tracker/history?limit=10', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d?.records)) setHistory(d.records);
+      })
+      .catch(() => {});
   }, []);
 
   // Live timer
@@ -100,22 +123,38 @@ export default function MyAttendance() {
   const transparencyMsg = att?.lateByMins > 0 && att?.shiftRules?.shiftStart && att?.checkInTime
     ? `Late by ${att.lateByMins} mins (Shift: ${att.shiftRules.shiftStart} | Clock-in: ${new Date(att.checkInTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })} | Grace: ${att.shiftRules.graceMinutes} mins)`
     : '';
-  const markOffTomorrow = async () => {
-    setLeaveSaving(true);
-    try {
-      const r = await fetch('/api/leaves/off-tomorrow', { method: 'POST' });
-      const d = await r.json();
-      if (d.ok) {
-        flash('Off tomorrow marked successfully', true);
-        fetchStatus();
-      } else {
-        flash(d.error || 'Unable to mark off tomorrow', false);
-      }
-    } catch {
-      flash('Network error', false);
-    } finally {
-      setLeaveSaving(false);
-    }
+  const saveCheckins = (next: any[]) => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await fetch('/api/tracker/today', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ checkins: next }),
+        });
+      } catch {}
+    }, 300);
+  };
+
+  const updateCheckin = (key: string, nextStatus: 'started' | 'completed') => {
+    setCheckins((prev) => {
+      const next = prev.map((c) => {
+        if (c.key !== key) return c;
+        const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+        if (nextStatus === 'started') return { ...c, status: 'started', startedAt: now };
+        return { ...c, status: 'completed', completedAt: now };
+      });
+      saveCheckins(next);
+      return next;
+    });
+  };
+
+  const updateCheckinField = (key: string, patch: any) => {
+    setCheckins((prev) => {
+      const next = prev.map((c) => (c.key === key ? { ...c, ...patch } : c));
+      saveCheckins(next);
+      return next;
+    });
   };
 
   return (
@@ -217,19 +256,6 @@ export default function MyAttendance() {
               </div>
             ) : (
               <div className="space-y-3">
-                {!att?.isOffTomorrow && (
-                  <button onClick={markOffTomorrow} disabled={leaveSaving}
-                    className="w-full py-2.5 rounded-2xl font-semibold text-xs disabled:opacity-50"
-                    style={{ background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.2)', color: '#2563eb' }}>
-                    {leaveSaving ? 'Saving...' : 'Mark Off Tomorrow'}
-                  </button>
-                )}
-                {att?.isOffTomorrow && (
-                  <div className="w-full py-2.5 rounded-2xl text-xs font-semibold text-center"
-                    style={{ background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.2)', color: '#2563eb' }}>
-                    Off Tomorrow Confirmed
-                  </div>
-                )}
                 {/* Not clocked in */}
                 {!att?.isCheckedIn && !att?.isOnBreak && !att?.isInField && !att?.isOffToday && (
                   <button onClick={() => doAction('/api/attendance/checkin', {})} disabled={clocking}
@@ -278,6 +304,198 @@ export default function MyAttendance() {
                     Return from Field
                   </button>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* Daily Growth Checkins */}
+          <div style={card} className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-gray-900">Daily Growth Checkins</h2>
+              <div className="text-[10px]" style={{ color: '#6b7280' }}>4 updates required</div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {checkins.map((c) => (
+                <div key={c.key} className="p-4 rounded-2xl border" style={{ borderColor: '#e5e7eb', background: '#fff' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-semibold text-gray-900">{c.label}</div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full"
+                      style={{
+                        background: c.status === 'completed' ? 'rgba(16,185,129,0.15)' : c.status === 'started' ? 'rgba(245,158,11,0.15)' : 'rgba(107,114,128,0.1)',
+                        color: c.status === 'completed' ? '#10b981' : c.status === 'started' ? '#f59e0b' : '#6b7280',
+                      }}>
+                      {c.status === 'completed' ? 'Completed' : c.status === 'started' ? 'Started' : 'Pending'}
+                    </span>
+                  </div>
+                  <div className="text-xs mb-3" style={{ color: '#6b7280' }}>{c.range}</div>
+                  <div className="text-xs mb-2" style={{ color: '#6b7280' }}>
+                    {c.targetCount || 0} leads by this check-in
+                  </div>
+                  <div className="w-full h-1.5 rounded-full mb-3" style={{ background: '#f3f4f6' }}>
+                    <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (Number(c.targetCount || 0) / 10) * 100)}%`, background: '#f97316' }} />
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    value={c.targetCount || 0}
+                    onChange={(e) => updateCheckinField(c.key, { targetCount: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-2"
+                    placeholder="Leads target count"
+                  />
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">MYT ADDED</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.mytAdded || 0}
+                        onChange={(e) => updateCheckinField(c.key, { mytAdded: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">TOURS IN PIPELINE</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.toursInPipeline || 0}
+                        onChange={(e) => updateCheckinField(c.key, { toursInPipeline: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">TOURS DONE</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.toursDone || 0}
+                        onChange={(e) => updateCheckinField(c.key, { toursDone: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">CALLS DONE</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.callsDone || 0}
+                        onChange={(e) => updateCheckinField(c.key, { callsDone: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">CONNECTED</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.connected || 0}
+                        onChange={(e) => updateCheckinField(c.key, { connected: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 ml-1">WHO'LL PAY TODAY</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={c.mytWhoWillPayToday || 0}
+                        onChange={(e) => updateCheckinField(c.key, { mytWhoWillPayToday: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-[10px] text-gray-500 ml-1">Tenants Paid</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={c.tenantsPaid || 0}
+                      onChange={(e) => updateCheckinField(c.key, { tenantsPaid: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200"
+                    />
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={c.progressNote || ''}
+                    onChange={(e) => updateCheckinField(c.key, { progressNote: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-2"
+                    placeholder="Called 30 leads , 20 picked,  4 coming to see , 2 want virtual tours."
+                  />
+                  <textarea
+                    rows={1}
+                    value={c.doubts || ''}
+                    onChange={(e) => updateCheckinField(c.key, { doubts: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-2"
+                    placeholder="DOUBTS"
+                  />
+                  <textarea
+                    rows={1}
+                    value={c.problems || ''}
+                    onChange={(e) => updateCheckinField(c.key, { problems: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl text-xs border border-gray-200 mb-3"
+                    placeholder="PROBLEMS"
+                  />
+                  {(c.startedAt || c.completedAt) && (
+                    <div className="text-[10px] mb-3" style={{ color: '#6b7280' }}>
+                      {c.startedAt && <span>Started: {c.startedAt}</span>}
+                      {c.completedAt && <span>{c.startedAt ? ' • ' : ''}Completed: {c.completedAt}</span>}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => updateCheckin(c.key, 'started')}
+                      disabled={c.status === 'completed'}
+                      className="py-2 rounded-xl text-xs font-semibold disabled:opacity-50"
+                      style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
+                    >
+                      START
+                    </button>
+                    <button
+                      onClick={() => updateCheckin(c.key, 'completed')}
+                      disabled={c.status !== 'started'}
+                      className="py-2 rounded-xl text-xs font-semibold disabled:opacity-50"
+                      style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}
+                    >
+                      COMPLETE
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Daily Growth History */}
+          <div style={card} className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-gray-900">Daily Growth History</h2>
+              <div className="text-[10px]" style={{ color: '#6b7280' }}>Last 10 entries</div>
+            </div>
+            {history.length === 0 ? (
+              <div className="text-xs text-gray-600">No history yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {history.map((h: any) => (
+                  <div key={h._id} className="p-3 rounded-xl border" style={{ borderColor: '#e5e7eb', background: '#fff' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-semibold text-gray-900">{h.date}</div>
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>
+                        {Array.isArray(h.dailyCheckins) ? h.dailyCheckins.filter((c: any) => c.status === 'completed').length : 0} completed
+                      </div>
+                    </div>
+                    {Array.isArray(h.dailyCheckins) && h.dailyCheckins.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 text-[10px]" style={{ color: '#6b7280' }}>
+                        {h.dailyCheckins.map((c: any) => (
+                          <div key={c.key} className="flex items-center justify-between">
+                            <span>{c.label}</span>
+                            <span>{c.status === 'completed' ? 'Completed' : c.status === 'started' ? 'Started' : 'Pending'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>No checkins recorded.</div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>

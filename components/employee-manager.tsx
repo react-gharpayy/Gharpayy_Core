@@ -1,9 +1,11 @@
 ﻿'use client';
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Users, Plus, Upload, X, Trash2, Eye, EyeOff,
   CheckCircle, AlertCircle, Download, RefreshCw
 } from 'lucide-react';
+import { SHIFT_TEMPLATES, SHIFT_TYPE_LABELS, WEEK_DAYS, ShiftType, BreakItem } from '@/lib/shift-templates';
 
 interface Employee {
   _id: string;
@@ -18,6 +20,12 @@ interface CSVRow {
   email: string;
   password: string;
   role: string;
+  dateOfBirth?: string;
+  department?: string;
+  teamName?: string;
+  jobRole?: string;
+  officeZoneName?: string;
+  managerEmail?: string;
   status?: 'pending' | 'ok' | 'error';
   error?: string;
 }
@@ -51,6 +59,7 @@ export default function EmployeeManager() {
   const [showCSV, setShowCSV] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [userRole, setUserRole] = useState('');
 
   // Manual form
   const [fullName, setFullName] = useState('');
@@ -64,23 +73,88 @@ export default function EmployeeManager() {
   const [csvRows, setCsvRows] = useState<CSVRow[]>([]);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  // Bulk shift assignment
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkShiftType, setBulkShiftType] = useState<ShiftType>('FT_MAIN');
+  const [bulkStart, setBulkStart] = useState(SHIFT_TEMPLATES.FT_MAIN.workStart);
+  const [bulkEnd, setBulkEnd] = useState(SHIFT_TEMPLATES.FT_MAIN.workEnd);
+  const [bulkBreaks, setBulkBreaks] = useState<BreakItem[]>(SHIFT_TEMPLATES.FT_MAIN.breaks);
+  const [bulkWeekOffs, setBulkWeekOffs] = useState<string[]>(SHIFT_TEMPLATES.FT_MAIN.weekOffs);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const flash = (text: string, ok: boolean) => {
     setMsg({ text, ok });
     setTimeout(() => setMsg(null), 5000);
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.length === employees.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(employees.map(e => e._id));
+    }
+  };
+
+  const applyBulkTemplate = (type: ShiftType) => {
+    if (type === 'CUSTOM') return;
+    const t = SHIFT_TEMPLATES[type];
+    setBulkStart(t.workStart);
+    setBulkEnd(t.workEnd);
+    setBulkBreaks(t.breaks);
+    setBulkWeekOffs(t.weekOffs);
+  };
+
+  const saveBulkShift = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkSaving(true);
+    try {
+      const body: any = {
+        userIds: selectedIds,
+        shiftType: bulkShiftType,
+        startTime: bulkStart,
+        endTime: bulkEnd,
+        breaks: bulkBreaks,
+        weekOffs: bulkWeekOffs,
+      };
+      const r = await fetch('/api/work-schedule', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        flash(`Shift assigned to ${selectedIds.length} employee(s).`, true);
+        setBulkOpen(false);
+        setSelectedIds([]);
+      } else {
+        flash(d.error || 'Bulk update failed', false);
+      }
+    } catch {
+      flash('Bulk update failed', false);
+    }
+    setBulkSaving(false);
+  };
+
   const fetchEmployees = () => {
-    fetch('/api/employees', { cache: 'no-store' })
+    fetch('/api/employees?page=1&limit=100', { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { if (d.users) setEmployees(d.users); })
+      .then(d => { if (d.users) { setEmployees(d.users); setSelectedIds([]); } })
       .catch(() => {})
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchEmployees(); }, []);
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.role) setUserRole(d.role); }).catch(() => {});
+  }, []);
 
-  // ”€”€ Manual create ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+  // Manual create
   const handleManualCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim() || !password) return;
@@ -93,7 +167,7 @@ export default function EmployeeManager() {
       });
       const d = await r.json();
       if (d.ok) {
-        flash(`œ… ${fullName} added successfully!`, true);
+        flash(`${fullName} added successfully.`, true);
         setFullName(''); setEmail(''); setPassword(''); setRole('employee');
         setShowManual(false);
         fetchEmployees();
@@ -106,7 +180,7 @@ export default function EmployeeManager() {
     setSubmitting(false);
   };
 
-  // ”€”€ CSV parsing ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+  // CSV parsing
   const handleCSVFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -115,16 +189,30 @@ export default function EmployeeManager() {
       const text = ev.target?.result as string;
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       const rows: CSVRow[] = [];
-      // Skip header row
-      const start = lines[0].toLowerCase().includes('name') ? 1 : 0;
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const hasHeader = header.some(h => h.includes('name') || h.includes('email'));
+      const start = hasHeader ? 1 : 0;
+      const idx = (name: string) => header.findIndex(h => h === name || h.replace(/\s+/g, '') === name.replace(/\s+/g, ''));
+
       for (let i = start; i < lines.length; i++) {
         const parts = lines[i].split(',').map(p => p.trim());
         if (parts.length < 3) continue;
+        const get = (key: string, fallbackIndex?: number) => {
+          const index = hasHeader ? idx(key) : (fallbackIndex ?? -1);
+          return index >= 0 ? (parts[index] || '') : '';
+        };
+
         rows.push({
-          fullName: parts[0] || '',
-          email: parts[1] || '',
-          password: parts[2] || 'Pass@1234',
-          role: parts[3]?.toLowerCase() || 'employee',
+          fullName: get('full name', 0) || get('name', 0),
+          email: get('email', 1),
+          password: get('password', 2) || 'Pass@1234',
+          role: userRole === 'manager' ? 'employee' : (get('role', 3).toLowerCase() || 'employee'),
+          dateOfBirth: get('dob') || get('date of birth'),
+          department: get('department'),
+          teamName: get('team') || get('team name'),
+          jobRole: get('job role') || get('jobrole'),
+          officeZoneName: get('office zone') || get('zone') || get('officezonename'),
+          managerEmail: get('manager email') || get('manager'),
           status: 'pending',
         });
       }
@@ -148,7 +236,13 @@ export default function EmployeeManager() {
             fullName: updated[i].fullName,
             email: updated[i].email.toLowerCase(),
             password: updated[i].password,
-            role: ROLES.includes(updated[i].role) ? updated[i].role : 'employee',
+            role: userRole === 'manager' ? 'employee' : (ROLES.includes(updated[i].role) ? updated[i].role : 'employee'),
+            dateOfBirth: updated[i].dateOfBirth,
+            department: updated[i].department,
+            teamName: updated[i].teamName,
+            jobRole: updated[i].jobRole,
+            officeZoneName: updated[i].officeZoneName,
+            managerEmail: updated[i].managerEmail,
           }),
         });
         const d = await r.json();
@@ -169,7 +263,7 @@ export default function EmployeeManager() {
     fetchEmployees();
   };
 
-  // ”€”€ Delete ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+  // Delete
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Remove ${name}? This will delete their account but keep attendance records.`)) return;
     setDeleting(id);
@@ -188,9 +282,13 @@ export default function EmployeeManager() {
     setDeleting(null);
   };
 
-  // ”€”€ CSV template download ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€
+  // CSV template download
   const downloadTemplate = () => {
-    const csv = 'Full Name,Email,Password,Role\nSatvik Sharma,satvik@gharpayy.com,Pass@1234,employee\nPulkit Gupta,pulkit@gharpayy.com,Pass@1234,employee';
+    const csv = [
+      'Full Name,Email,Password,Role,DOB,Department,Team,Job Role,Office Zone,Manager Email',
+      'Satvik Sharma,satvik@gharpayy.com,Pass@1234,employee,1998-07-12,Sales,MWB MORE,full-time,KORA CORE,manager@gharpayy.com',
+      'Pulkit Gupta,pulkit@gharpayy.com,Pass@1234,employee,1997-03-05,Ops,KORA CORE,full-time,MWB MORE,manager@gharpayy.com',
+    ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -210,7 +308,7 @@ export default function EmployeeManager() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-800">Employee Management</h2>
-              <p className="text-xs text-gray-700 mt-0.5">{employees.length} accounts  -  Admin only</p>
+              <p className="text-xs text-gray-700 mt-0.5">{employees.length} accounts  -  Admin/Manager</p>
             </div>
           </div>
           <button onClick={fetchEmployees} className="p-2 rounded-xl hover:bg-gray-100 transition">
@@ -264,6 +362,27 @@ export default function EmployeeManager() {
       {/* Employee list */}
       <div className="bg-white rounded-3xl border border-gray-200 p-6">
         <h3 className="font-bold text-gray-800 mb-4 text-sm">All Employees ({employees.length})</h3>
+        {userRole === 'admin' && (
+          <div className="flex items-center justify-between mb-4">
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={employees.length > 0 && selectedIds.length === employees.length}
+                onChange={toggleSelectAll}
+              />
+              Select all
+            </label>
+            {selectedIds.length > 0 && (
+              <button
+                onClick={() => setBulkOpen(true)}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
+                style={{ background: '#f97316' }}
+              >
+                Bulk Assign Shift ({selectedIds.length})
+              </button>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-3 animate-pulse">
@@ -281,8 +400,17 @@ export default function EmployeeManager() {
               const ci = colorIdx(emp.fullName);
               return (
                 <div key={emp._id}
-                  className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100 hover:border-gray-200 transition">
+                  className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100 hover:border-gray-200 transition cursor-pointer"
+                  onClick={() => router.push(`/employee-detail?employeeId=${emp._id}`)}>
                   <div className="flex items-center gap-3">
+                    {userRole === 'admin' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(emp._id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleSelect(emp._id)}
+                      />
+                    )}
                     <div className={`w-10 h-10 rounded-full ${COLORS[ci]} flex items-center justify-center text-xs font-bold ${TEXT_COLORS[ci]} flex-shrink-0`}>
                       {initials(emp.fullName)}
                     </div>
@@ -300,13 +428,15 @@ export default function EmployeeManager() {
                       }`}>{emp.role}</span>
                       <p className="text-[10px] text-gray-400 mt-0.5">{timeAgo(emp.createdAt)}</p>
                     </div>
-                    <button
-                      onClick={() => handleDelete(emp._id, emp.fullName)}
-                      disabled={deleting === emp._id}
-                      className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition disabled:opacity-40"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {userRole !== 'manager' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(emp._id, emp.fullName); }}
+                        disabled={deleting === emp._id}
+                        className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition disabled:opacity-40"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -322,7 +452,7 @@ export default function EmployeeManager() {
           <div className="bg-white rounded-3xl border border-gray-200 w-full max-w-md shadow-2xl p-6"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-gray-800">Add Employee</h3>
+              <h3 className="text-lg font-bold text-gray-800">{userRole === 'manager' ? 'Add Team Member' : 'Add Employee'}</h3>
               <button onClick={() => setShowManual(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100">
                 <X className="w-4 h-4 text-gray-700" />
@@ -355,15 +485,17 @@ export default function EmployeeManager() {
                   </button>
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1.5 block">Role</label>
-                <select value={role} onChange={e => setRole(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                  <option value="employee">Employee</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
+              {userRole !== 'manager' && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1.5 block">Role</label>
+                  <select value={role} onChange={e => setRole(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                    <option value="employee">Employee</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              )}
               <button type="submit" disabled={submitting}
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-2xl transition disabled:opacity-60 mt-2">
                 {submitting ? 'Creating...' : 'Create Account'}
@@ -430,10 +562,166 @@ export default function EmployeeManager() {
                     Importing...
                   </>
                 ) : csvRows.every(r => r.status === 'ok') ? (
-                  'œ… All Imported!'
+                  'All imported'
                 ) : (
                   `Import ${csvRows.filter(r => r.status !== 'ok').length} Employees`
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk shift assignment modal */}
+      {bulkOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-4"
+          onClick={() => { if (!bulkSaving) setBulkOpen(false); }}>
+          <div className="bg-white rounded-3xl border border-gray-200 w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Bulk Shift Assignment</h3>
+                <p className="text-xs text-gray-700 mt-0.5">{selectedIds.length} employee(s) selected</p>
+              </div>
+              {!bulkSaving && (
+                <button onClick={() => setBulkOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100">
+                  <X className="w-4 h-4 text-gray-700" />
+                </button>
+              )}
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs text-gray-700 mb-1.5">Shift Type</label>
+                <select
+                  value={bulkShiftType}
+                  onChange={(e) => {
+                    const next = e.target.value as ShiftType;
+                    setBulkShiftType(next);
+                    applyBulkTemplate(next);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
+                >
+                  {Object.entries(SHIFT_TYPE_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-700 mb-1.5">Work Start Time</label>
+                  <input type="time" value={bulkStart} disabled={bulkShiftType !== 'CUSTOM'} onChange={(e) => setBulkStart(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
+                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }} />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-700 mb-1.5">Work End Time</label>
+                  <input type="time" value={bulkEnd} disabled={bulkShiftType !== 'CUSTOM'} onChange={(e) => setBulkEnd(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
+                    style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-700 mb-1.5">Break Schedule</label>
+                <div className="space-y-2">
+                  {bulkBreaks.map((b, idx) => (
+                    <div key={`${b.name}-${idx}`} className="grid grid-cols-4 gap-2">
+                      <input
+                        type="text"
+                        value={b.name}
+                        disabled={bulkShiftType !== 'CUSTOM'}
+                        onChange={(e) => {
+                          const next = [...bulkBreaks];
+                          next[idx] = { ...next[idx], name: e.target.value };
+                          setBulkBreaks(next);
+                        }}
+                        className="px-3 py-2 rounded-xl text-xs focus:outline-none disabled:opacity-60"
+                        style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
+                      />
+                      <input
+                        type="time"
+                        value={b.start}
+                        disabled={bulkShiftType !== 'CUSTOM'}
+                        onChange={(e) => {
+                          const next = [...bulkBreaks];
+                          next[idx] = { ...next[idx], start: e.target.value };
+                          setBulkBreaks(next);
+                        }}
+                        className="px-3 py-2 rounded-xl text-xs focus:outline-none disabled:opacity-60"
+                        style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
+                      />
+                      <input
+                        type="time"
+                        value={b.end}
+                        disabled={bulkShiftType !== 'CUSTOM'}
+                        onChange={(e) => {
+                          const next = [...bulkBreaks];
+                          next[idx] = { ...next[idx], end: e.target.value };
+                          setBulkBreaks(next);
+                        }}
+                        className="px-3 py-2 rounded-xl text-xs focus:outline-none disabled:opacity-60"
+                        style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={b.durationMinutes}
+                        disabled={bulkShiftType !== 'CUSTOM'}
+                        onChange={(e) => {
+                          const next = [...bulkBreaks];
+                          next[idx] = { ...next[idx], durationMinutes: Number(e.target.value) };
+                          setBulkBreaks(next);
+                        }}
+                        className="px-3 py-2 rounded-xl text-xs focus:outline-none disabled:opacity-60"
+                        style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#111827' }}
+                      />
+                    </div>
+                  ))}
+                  {bulkShiftType === 'CUSTOM' && (
+                    <button
+                      onClick={() => setBulkBreaks(p => [...p, { name: 'Break', start: '13:00', end: '13:15', durationMinutes: 15 }])}
+                      className="text-xs font-semibold text-orange-600"
+                    >
+                      + Add Break
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-700 mb-1.5">Week Off</label>
+                <div className="flex flex-wrap gap-2">
+                  {WEEK_DAYS.map(day => {
+                    const checked = bulkWeekOffs.includes(day);
+                    return (
+                      <label key={day} className="flex items-center gap-1 text-xs text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked ? [...bulkWeekOffs, day] : bulkWeekOffs.filter(d => d !== day);
+                            setBulkWeekOffs(next);
+                          }}
+                        />
+                        {day.slice(0, 3)}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100">
+              <button
+                onClick={saveBulkShift}
+                disabled={bulkSaving || selectedIds.length === 0}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-2xl transition disabled:opacity-60"
+              >
+                {bulkSaving ? 'Applying...' : 'Apply Shift to Selected'}
               </button>
             </div>
           </div>

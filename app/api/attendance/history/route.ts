@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
+import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr } from '@/lib/attendance-utils';
 
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
     const start = searchParams.get('start');
     const end = searchParams.get('end');
     const month = searchParams.get('month');
+    const status = searchParams.get('status');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
     const employeeIdParam = searchParams.get('employeeId');
 
     let employeeId = user.id;
@@ -28,14 +32,17 @@ export async function GET(req: NextRequest) {
     }
 
     await connectDB();
-    const range = start && end ? { start, end } : getMonthRange(month || undefined);
+    const range = start && end ? { start, end } : (month ? getMonthRange(month || undefined) : null);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = await Attendance.find({
-      employeeId,
-      date: { $gte: range.start, $lte: range.end },
-    })
+    const match: any = { employeeId };
+    if (range) match.date = { $gte: range.start, $lte: range.end };
+    if (status) match.dayStatus = status;
+
+    const total = await Attendance.countDocuments(match);
+    const rows = await Attendance.find(match)
       .sort({ date: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
       .lean() as any[];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,20 +65,36 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const summaryMatch = { ...match };
+    if (status) delete summaryMatch.dayStatus;
+    const summaryAgg = await Attendance.aggregate([
+      { $match: summaryMatch },
+      { $group: {
+        _id: null,
+        totalDays: { $sum: 1 },
+        presentDays: { $sum: { $cond: [{ $ne: ['$dayStatus', 'Absent'] }, 1, 0] } },
+        lateDays: { $sum: { $cond: [{ $eq: ['$dayStatus', 'Late'] }, 1, 0] } },
+        earlyDays: { $sum: { $cond: [{ $eq: ['$dayStatus', 'Early'] }, 1, 0] } },
+        totalWorkMins: { $sum: '$totalWorkMins' },
+      }},
+    ]);
+    const summaryRecord = summaryAgg[0] || { totalDays: 0, presentDays: 0, lateDays: 0, earlyDays: 0, totalWorkMins: 0 };
+
     return NextResponse.json({
       ok: true,
       range,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
       records,
       summary: {
-        totalDays: records.length,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        presentDays: records.filter((r: any) => r.dayStatus !== 'Absent').length,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        lateDays: records.filter((r: any) => r.dayStatus === 'Late').length,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        earlyDays: records.filter((r: any) => r.dayStatus === 'Early').length,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        totalWorkMins: records.reduce((s: number, r: any) => s + Number(r.totalWorkMins || 0), 0),
+        totalDays: summaryRecord.totalDays || 0,
+        presentDays: summaryRecord.presentDays || 0,
+        absentDays: Math.max(0, (summaryRecord.totalDays || 0) - (summaryRecord.presentDays || 0)),
+        lateDays: summaryRecord.lateDays || 0,
+        earlyDays: summaryRecord.earlyDays || 0,
+        totalWorkMins: summaryRecord.totalWorkMins || 0,
       },
     });
   } catch (e: unknown) {

@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
+import Leave from '@/models/Leave';
 import { getAuthUser } from '@/lib/auth';
-import { deriveStatusFromAttendance, getISTDateStr, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
+import { applyUserSchedule, deriveStatusFromAttendance, getISTDateStr, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
 import { IST_OFFSET_MS } from '@/lib/constants';
 
 function fmtTime(d: Date) {
@@ -37,13 +38,63 @@ export async function GET() {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    if (user.id === 'admin') {
+      const date = getISTDateStr();
+      const tomorrow = getISTDateDaysAgo(-1);
+      return NextResponse.json({
+        isCheckedIn: false,
+        isOnBreak: false,
+        isInField: false,
+        workMode: 'Absent',
+        checkInTime: null,
+        checkOutTime: null,
+        totalWorkMins: 0,
+        totalBreakMins: 0,
+        totalWorkFormatted: '0m',
+        totalBreakFormatted: '0m',
+        lateByMins: 0,
+        earlyByMins: 0,
+        sessions: 0,
+        dayStatus: 'Absent',
+        shiftRules: await getShiftRules(),
+        timeline: [],
+        workSchedule: null,
+        isOffToday: false,
+        isOffTomorrow: false,
+        session: {
+          status: 'offline',
+          clockInTime: null,
+          breakStart: null,
+          breakEnd: null,
+        },
+        weeklySummary: {
+          startDate: getISTDateDaysAgo(6),
+          endDate: date,
+          presentDays: 0,
+          lateDays: 0,
+          earlyDays: 0,
+          totalWorkMins: 0,
+          totalWorkFormatted: '0m',
+        },
+      });
+    }
+
     await connectDB();
     const date = getISTDateStr();
     const tomorrow = getISTDateDaysAgo(-1);
     const att = await Attendance.findOne({ employeeId: user.id, date });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dbUser = await User.findById(user.id).select('workSchedule leaves').lean() as any;
-    const rules = await getShiftRules();
+    const offLeave = await Leave.findOne({
+      employeeId: user.id,
+      startDate: tomorrow,
+      endDate: tomorrow,
+      $or: [{ leaveType: 'casual' }, { type: 'Casual' }],
+      reason: 'Off tomorrow',
+      status: { $in: ['pending', 'approved'] },
+    }).lean() as any;
+    const baseRules = await getShiftRules();
+    const rules = applyUserSchedule(baseRules, dbUser?.workSchedule);
 
     if (!att) {
       return NextResponse.json({
@@ -68,6 +119,7 @@ export async function GET() {
         isOffToday: Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === date && l.type === 'day_off') : false,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isOffTomorrow: Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === tomorrow && l.type === 'day_off') : false,
+        offTomorrowStatus: offLeave ? offLeave.status : 'none',
         session: {
           status: 'offline',
           clockInTime: null,
@@ -124,6 +176,7 @@ export async function GET() {
     const isOffToday = Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === date && l.type === 'day_off') : false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isOffTomorrow = Array.isArray(dbUser?.leaves) ? dbUser.leaves.some((l: any) => l.date === tomorrow && l.type === 'day_off') : false;
+    const offStatus = offLeave ? offLeave.status : 'none';
 
     return NextResponse.json({
       isCheckedIn: att.isCheckedIn,
@@ -145,6 +198,7 @@ export async function GET() {
       workSchedule: dbUser?.workSchedule || null,
       isOffToday,
       isOffTomorrow,
+      offTomorrowStatus: offStatus,
       session: {
         status: sessionStatus,
         clockInTime: firstWorkSession?.checkIn?.toISOString() || null,

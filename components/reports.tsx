@@ -4,6 +4,8 @@ import { FileText, BarChart2, Download, CheckSquare, AlertTriangle, MapPin, Cloc
 
 const REPORTS = [
   { id: 'daily_attendance',  icon: FileText,      color: '#10b981', label: 'Daily Attendance',      desc: 'Present/absent/break breakdown for today' },
+  { id: 'daily_breaks',      icon: Clock,         color: '#f59e0b', label: 'Daily Break Report',     desc: 'Day-wise break minutes for all employees' },
+  { id: 'weekly_breaks',     icon: Clock,         color: '#f97316', label: 'Weekly Break Report',    desc: 'Weekly break minutes per employee (use date to pick week end)' },
   { id: 'monthly_attendance', icon: Clock,        color: '#f97316', label: 'Monthly Attendance',    desc: 'Day-wise attendance export for selected month' },
   { id: 'weekly_summary',    icon: BarChart2,     color: '#6366f1', label: 'Weekly Task Summary',   desc: 'Completion rates and blockers' },
   { id: 'kpi_export',        icon: Download,      color: '#f59e0b', label: 'KPI Export',            desc: 'Team KPIs vs targets CSV' },
@@ -17,12 +19,14 @@ export default function Reports() {
   const [done, setDone] = useState<string[]>([]);
   const [format, setFormat] = useState<'csv' | 'excel'>('csv');
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
   const generate = async (id: string) => {
     setGenerating(id);
     try {
       const params = new URLSearchParams({ type: id, format });
       if (id === 'monthly_attendance') params.set('month', month);
+      if (id === 'daily_breaks' || id === 'weekly_breaks') params.set('date', date);
       const res = await fetch(`/api/reports/export?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed');
       const blob = await res.blob();
@@ -67,6 +71,16 @@ export default function Reports() {
               type="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              style={{ background: '#ffffff', border: '1px solid #e5e7eb', color: '#111827' }}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] mb-1.5" style={{ color: '#6b7280' }}>Date (for Daily/Weekly Break Report)</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               style={{ background: '#ffffff', border: '1px solid #e5e7eb', color: '#111827' }}
             />

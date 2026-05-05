@@ -56,6 +56,25 @@ export default function KPIsDashboard() {
 
   const kpis = data?.kpis || { attendance: 0, onTimeRate: 0, taskCompletion: 0, breakDiscipline: 0 };
   const summary = data?.summary || {};
+  const teamKras = (() => {
+    const pulse = data?.teamPulse || [];
+    const map: Record<string, { team: string; total: number; present: number; onTime: number }> = {};
+    pulse.forEach((emp: any) => {
+      const team = emp.team || 'No Team';
+      if (!map[team]) map[team] = { team, total: 0, present: 0, onTime: 0 };
+      map[team].total += 1;
+      if (emp.workMode !== 'Absent') map[team].present += 1;
+      if (emp.dayStatus === 'On Time' || emp.dayStatus === 'Early') map[team].onTime += 1;
+    });
+    return Object.values(map)
+      .map(t => ({
+        team: t.team,
+        attendanceRate: t.total ? Math.round((t.present / t.total) * 100) : 0,
+        onTimeRate: t.present ? Math.round((t.onTime / Math.max(t.present, 1)) * 100) : 0,
+      }))
+      .sort((a, b) => b.attendanceRate - a.attendanceRate)
+      .slice(0, 4);
+  })();
 
   return (
     <div className="space-y-4">
@@ -79,10 +98,19 @@ export default function KPIsDashboard() {
       <div style={card} className="p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-5">KRAs by Team</h2>
         <div className="space-y-4">
-          <ProgressBar label="Sales - Lead Conversion"     value={84} color="#10b981"/>
-          <ProgressBar label="Ops - Property Coordination" value={92} color="#6366f1"/>
-          <ProgressBar label="Field - Visit Completion"    value={78} color="#f59e0b"/>
-          <ProgressBar label="BD - New Partnerships"       value={65} color="#a855f7"/>
+          {teamKras.map((t, i) => (
+            <ProgressBar
+              key={t.team}
+              label={`${t.team} - Attendance Rate`}
+              value={t.attendanceRate}
+              color={['#10b981', '#6366f1', '#f59e0b', '#a855f7'][i % 4]}
+            />
+          ))}
+          {teamKras.length === 0 && (
+            <div className="text-center py-4 text-xs" style={{ color: '#6b7280' }}>
+              No team data yet
+            </div>
+          )}
         </div>
       </div>
 
@@ -105,11 +133,26 @@ export default function KPIsDashboard() {
         </div>
       </div>
 
-      {/* Top Performers placeholder */}
+      {/* Top Performers */}
       <div style={card} className="p-5">
         <h2 className="text-sm font-bold text-gray-900 mb-4">Top Performers</h2>
         <div className="space-y-2">
-          {data?.teamPulse?.filter((e: any) => e.workMode !== 'Absent').slice(0, 5).map((emp: any, i: number) => (
+          {data?.teamPulse &&
+            data.teamPulse
+              .map((emp: any) => {
+                const score = emp.dayStatus === 'Early' ? 100
+                  : emp.dayStatus === 'On Time' ? 95
+                  : emp.dayStatus === 'Late' ? 80
+                  : 0;
+                return { ...emp, score };
+              })
+              .filter((e: any) => e.workMode !== 'Absent')
+              .sort((a: any, b: any) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return String(a.employeeName).localeCompare(String(b.employeeName));
+              })
+              .slice(0, 5)
+              .map((emp: any, i: number) => (
             <div key={emp.employeeId} className="flex items-center gap-3 p-3 rounded-xl"
               style={{ background: '#f9fafb', border: '1px solid #f3f4f6' }}>
               <span className="text-sm font-bold w-6 text-center" style={{ color: i === 0 ? '#f59e0b' : '#6b7280' }}>#{i+1}</span>
@@ -121,7 +164,7 @@ export default function KPIsDashboard() {
                 <div className="text-[10px]" style={{ color: '#6b7280' }}>{emp.team}</div>
               </div>
               <span className="text-sm font-bold" style={{ color: '#10b981' }}>
-                {emp.dayStatus === 'Early' ? '100%' : emp.dayStatus === 'On Time' ? '95%' : '80%'}
+                {emp.score}%
               </span>
             </div>
           ))}

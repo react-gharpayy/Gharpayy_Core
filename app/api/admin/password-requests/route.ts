@@ -11,13 +11,19 @@ export async function GET() {
 
     await connectDB();
     const now = new Date();
-    const rows = await PasswordChangeRequest.find({
+    let rows = await PasswordChangeRequest.find({
       $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
     }).sort({ createdAt: -1 }).lean() as any[];
 
     const userIds = rows.map(r => r.userId);
     const users = await User.find({ _id: { $in: userIds } }, 'fullName email').lean() as any[];
     const uMap = new Map(users.map(u => [u._id.toString(), u]));
+
+    if (auth.role === 'manager') {
+      const teamEmployees = await User.find({ managerId: auth.id, role: 'employee' }, '_id').lean() as { _id: { toString: () => string } }[];
+      const teamIds = new Set(teamEmployees.map(e => e._id.toString()));
+      rows = rows.filter(r => teamIds.has(r.userId.toString()));
+    }
 
     const requests = rows.map(r => ({
       _id: r._id.toString(),

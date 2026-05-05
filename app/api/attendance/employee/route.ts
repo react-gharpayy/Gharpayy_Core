@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
-import { getISTDateStr, recomputeAttendanceTotals } from '@/lib/attendance-utils';
+import { applyUserSchedule, deriveStatusFromAttendance, getISTDateStr, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
 import { IST_OFFSET_MS } from '@/lib/constants';
 import { canAccessEmployee } from '@/lib/role-guards';
 
@@ -28,8 +28,7 @@ function fmtMins(m: number) {
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    // sub_admin now allowed - was only admin|manager
-    if (!user || !['admin', 'manager', 'sub_admin'].includes(user.role)) {
+    if (!user || !['admin', 'manager'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -41,13 +40,10 @@ export async function GET(req: NextRequest) {
     const emp = await User.findById(employeeId);
     if (!emp) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
 
-    // sub_admin: verify the employee belongs to their team before returning any data
-    if (!canAccessEmployee(user, emp.officeZoneId?.toString())) {
-      return NextResponse.json({ error: 'Access denied: employee is not in your team' }, { status: 403 });
-    }
-
     const today = getISTDateStr();
     const att   = await Attendance.findOne({ employeeId, date: today });
+    const baseRules = await getShiftRules();
+    const rules = applyUserSchedule(baseRules, emp?.workSchedule);
 
     const start = new Date(today);
     start.setDate(start.getDate() - 29);
@@ -59,6 +55,13 @@ export async function GET(req: NextRequest) {
     const timeline: { time: string; label: string; type: string }[] = [];
     if (att) {
       recomputeAttendanceTotals(att);
+      const derived = deriveStatusFromAttendance(att, rules);
+      if (att.dayStatus !== derived.dayStatus || (att.lateByMins || 0) !== derived.lateByMins || (att.earlyByMins || 0) !== derived.earlyByMins) {
+        att.dayStatus = derived.dayStatus;
+        att.lateByMins = derived.lateByMins;
+        att.earlyByMins = derived.earlyByMins;
+        await att.save();
+      }
       for (const s of att.sessions) {
         if (s.type === 'break') {
           timeline.push({ time: fmtTime(new Date(s.checkIn)), label: 'Break Started',  type: 'break_start' });

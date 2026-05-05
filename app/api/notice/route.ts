@@ -19,7 +19,6 @@ export async function GET() {
 
     let notices;
     if (isManager) {
-      // Managers see all notices they created + all general notices
       notices = await Notice.find({}).sort({ createdAt: -1 }).limit(NOTICE_LIMIT);
     } else {
       // Employees see notices targeting them or all employees
@@ -116,6 +115,11 @@ export async function DELETE(req: NextRequest) {
     const { id } = await req.json();
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
     await connectDB();
+    const notice = await Notice.findById(id);
+    if (!notice) return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
+    if (user.role === 'manager' && notice.createdBy !== user.id) {
+      return NextResponse.json({ error: 'Cannot delete notice outside your team' }, { status: 403 });
+    }
     const deleted = await Notice.findByIdAndDelete(id);
     if (!deleted) return NextResponse.json({ error: 'Notice not found' }, { status: 404 });
     return NextResponse.json({ ok: true });

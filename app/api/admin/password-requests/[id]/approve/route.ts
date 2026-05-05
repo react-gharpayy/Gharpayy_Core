@@ -20,6 +20,13 @@ export async function POST(_: NextRequest, ctx: { params: Promise<{ id: string }
       return NextResponse.json({ error: 'Request expired' }, { status: 400 });
     }
 
+    if (auth.role === 'manager') {
+      const target = await User.findById(reqRow.userId).select('managerId').lean() as { managerId?: { toString?: () => string } } | null;
+      if (!target || target.managerId?.toString?.() !== auth.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
+    }
+
     await User.findByIdAndUpdate(reqRow.userId, { password: reqRow.newPasswordHash });
     reqRow.status = 'approved';
     await reqRow.save();

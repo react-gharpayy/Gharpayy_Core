@@ -8,7 +8,7 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/constants';
 import { taskSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
 import { getISTDateStr } from '@/lib/attendance-utils';
-import { isSubAdmin, canAccessEmployee } from '@/lib/role-guards';
+import { isAdmin, isElevated, isSubAdmin, canAccessEmployee } from '@/lib/role-guards';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildSummary(tasks: any[]) {
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     if (!assignee) return NextResponse.json({ error: 'Assignee not found' }, { status: 404 });
 
     // sub_admin: enforce that assignee belongs to their team
-    if (isSubAdmin(user)) {
+    if (isSubAdmin(user) && user.role !== 'manager') {
       const zoneId = assignee.officeZoneId?._id?.toString() || assignee.officeZoneId?.toString();
       if (!canAccessEmployee(user, zoneId)) {
         return NextResponse.json({ error: 'Cannot assign task to employee outside your team' }, { status: 403 });
@@ -148,7 +148,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // sub_admin: can only update tasks in their team
-    if (isSubAdmin(user) && user.assignedTeamId) {
+    if (isSubAdmin(user) && user.role !== 'manager' && user.assignedTeamId) {
       if (task.teamId && task.teamId.toString() !== user.assignedTeamId) {
         return NextResponse.json({ error: 'Cannot update task outside your team' }, { status: 403 });
       }

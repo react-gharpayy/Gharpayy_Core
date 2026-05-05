@@ -22,6 +22,10 @@ export default function TeamHierarchy() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [managerFilter, setManagerFilter] = useState('');
+  const [userRole, setUserRole] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newEmp, setNewEmp] = useState({ fullName: '', email: '', password: '' });
 
   const fetchOrg = () => {
     setLoading(true);
@@ -37,6 +41,9 @@ export default function TeamHierarchy() {
   };
 
   useEffect(() => { fetchOrg(); }, []);
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.role) setUserRole(d.role); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (tree.length > 0 || unassigned.length > 0) {
@@ -56,6 +63,35 @@ export default function TeamHierarchy() {
       if (d.ok) { flash('Saved!', true); setEditing(null); fetchOrg(); }
       else flash(d.error || 'Failed', false);
     } catch { flash('Error', false); } setSaving(false);
+  };
+
+  const addTeamMember = async () => {
+    if (!newEmp.fullName.trim() || !newEmp.email.trim() || !newEmp.password) return;
+    setAdding(true);
+    try {
+      const r = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: newEmp.fullName.trim(),
+          email: newEmp.email.trim().toLowerCase(),
+          password: newEmp.password,
+          role: 'employee',
+        }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        flash('Team member added', true);
+        setShowAdd(false);
+        setNewEmp({ fullName: '', email: '', password: '' });
+        fetchOrg();
+      } else {
+        flash(d.error || 'Failed to add', false);
+      }
+    } catch {
+      flash('Network error', false);
+    }
+    setAdding(false);
   };
 
   const card = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 20, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' };
@@ -80,11 +116,11 @@ export default function TeamHierarchy() {
               )}
             </div>
           </div>
-          {!isEditing ? (
+          {!isEditing && userRole !== 'manager' ? (
             <button onClick={() => { setEditing(emp._id); setEditData({ managerId: '', teamName: emp.teamName || '', department: emp.department || '' }); }}
               className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition flex-shrink-0"
               style={{ color: '#6b7280' }}><Edit2 className="w-3 h-3"/></button>
-          ) : (
+          ) : isEditing ? (
             <div className="flex gap-1 flex-shrink-0">
               <button onClick={() => saveEdit(emp._id)} disabled={saving}
                 className="w-7 h-7 flex items-center justify-center rounded-lg transition disabled:opacity-50"
@@ -93,10 +129,10 @@ export default function TeamHierarchy() {
                 className="w-7 h-7 flex items-center justify-center rounded-lg transition hover:bg-gray-100"
                 style={{ color: '#6b7280' }}><X className="w-3 h-3"/></button>
             </div>
-          )}
+          ) : null}
         </div>
 
-        {isEditing && (
+        {isEditing && userRole !== 'manager' && (
           <div className="mt-3 pt-3 space-y-2 border-t" style={{ borderColor: '#f3f4f6' }}>
             {managers.length > 0 && (
               <select value={editData.managerId} onChange={e => setEditData(p => ({ ...p, managerId: e.target.value }))}
@@ -123,11 +159,24 @@ export default function TeamHierarchy() {
   return (
     <div className="space-y-4">
       <div style={card} className="p-5">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">ARENA OS - Team Hierarchy</h1>
-        <div className="text-xs" style={{ color: '#6b7280' }}>
-          {groupedByZone ? 'Grouped by zone - assign team & department below' : 'Grouped by manager'}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">ARENA OS - Team Hierarchy</h1>
+            <div className="text-xs" style={{ color: '#6b7280' }}>
+              {groupedByZone ? 'Grouped by zone - assign team & department below' : 'Grouped by manager'}
+            </div>
+          </div>
+          {userRole === 'manager' && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold"
+              style={{ background: '#f97316', color: '#ffffff' }}
+            >
+              Add Team Member
+            </button>
+          )}
         </div>
-        {!groupedByZone && managers.length > 0 && (
+        {!groupedByZone && managers.length > 0 && userRole !== 'manager' && (
           <div className="mt-3">
             <select
               value={managerFilter}
@@ -191,7 +240,7 @@ export default function TeamHierarchy() {
             </div>
           ))}
 
-          {unassigned.length > 0 && (
+          {unassigned.length > 0 && userRole !== 'manager' && (
             <div style={{ ...card, borderColor: 'rgba(249,115,22,0.2)' }} className="overflow-hidden">
               <button onClick={() => setExpanded(p => ({ ...p, unassigned: !p.unassigned }))}
                 className="w-full flex items-center justify-between p-4 transition hover:bg-gray-50 text-left">
@@ -215,6 +264,47 @@ export default function TeamHierarchy() {
             </div>
           )}
         </>
+      )}
+
+      {showAdd && userRole === 'manager' && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-4"
+          onClick={() => setShowAdd(false)}>
+          <div className="bg-white rounded-3xl border border-gray-200 w-full max-w-md shadow-2xl p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-gray-800">Add Team Member</h3>
+              <button onClick={() => setShowAdd(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100">
+                <X className="w-4 h-4 text-gray-700" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1.5 block">Full Name</label>
+                <input value={newEmp.fullName} onChange={e => setNewEmp(p => ({ ...p, fullName: e.target.value }))}
+                  placeholder="Satvik Sharma" required
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1.5 block">Email</label>
+                <input value={newEmp.email} onChange={e => setNewEmp(p => ({ ...p, email: e.target.value }))}
+                  type="email" placeholder="satvik@gharpayy.com" required
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1.5 block">Password</label>
+                <input value={newEmp.password} onChange={e => setNewEmp(p => ({ ...p, password: e.target.value }))}
+                  type="password" placeholder="Min 6 characters" required minLength={6}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <button onClick={addTeamMember} disabled={adding}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-2xl transition disabled:opacity-60 mt-2">
+                {adding ? 'Creating...' : 'Create Account'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

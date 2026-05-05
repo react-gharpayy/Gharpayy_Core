@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import Header from '@/components/header';
 import Navigation from '@/components/navigation';
-import WeeklyHeatmap from '@/components/weekly-heatmap';
+import WeeklyHeatmap from '@/components/daily-heatmap';
 
 export default async function WeeklyHeatmapPage() {
   const user = await getAuthUser();

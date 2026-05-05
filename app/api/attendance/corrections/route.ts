@@ -8,6 +8,7 @@ import { getAuthUser } from '@/lib/auth';
 import { deriveStatusFromAttendance, getShiftRules, recomputeAttendanceTotals } from '@/lib/attendance-utils';
 import { correctionSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
+import { maybeCreditCompOff } from '@/lib/comp-off';
 
 function toDateInIST(date: string, time: string) {
   const [y, m, d] = date.split('-').map(Number);
@@ -80,6 +81,10 @@ export async function POST(req: NextRequest) {
       reviewNote: `Corrected to ${clockIn}-${clockOut}`,
       reviewedAt: new Date(),
     });
+
+    try {
+      await maybeCreditCompOff(employeeId, date, String(att._id), Number(att.totalWorkMins || 0));
+    } catch {}
 
     return NextResponse.json({ ok: true, attendanceId: att._id.toString() });
   } catch (e: unknown) {

@@ -4,10 +4,11 @@ import Attendance from '@/models/Attendance';
 import User from '@/models/User';
 import Task from '@/models/Task';
 import ExceptionRequest from '@/models/ExceptionRequest';
+import Tracker from '@/models/Tracker';
 import '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr } from '@/lib/attendance-utils';
-import { isSubAdmin, buildEmployeeFilter } from '@/lib/role-guards';
+import { isAdmin, isElevated, buildEmployeeFilter } from '@/lib/role-guards';
 
 function fmtTime(d: Date) {
   return new Date(d).toLocaleTimeString('en-IN', {
@@ -15,21 +16,26 @@ function fmtTime(d: Date) {
   });
 }
 
+function getISTDateDaysAgo(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return getISTDateStr(d);
+}
+
 export async function GET() {
   try {
     const user = await getAuthUser();
-    // sub_admin now allowed - was only admin|manager before
-    if (!user || !['admin', 'manager', 'sub_admin'].includes(user.role)) {
+    if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectDB();
     const today = getISTDateStr();
 
-    // Build employee filter - sub_admin sees only their team
-    const empFilter = buildEmployeeFilter(user, { isApproved: true, role: 'employee' });
+    // Build employee filter - manager sees only their team
+    const empFilter = buildEmployeeFilter(user, { isApproved: { $ne: false }, role: 'employee' });
     if (empFilter === null) {
-      return NextResponse.json({ error: 'Unauthorized: no team assigned' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,12 +99,13 @@ export async function GET() {
       return (o[a.workMode] ?? 4) - (o[b.workMode] ?? 4);
     });
 
-    // Tasks - sub_admin sees only their team's tasks
+    // Tasks - manager sees their team employees
     const taskSummary = { blocked: 0, overdue: 0, total: 0, completed: 0 };
     try {
-      const taskFilter = isSubAdmin(user) && user.assignedTeamId
-        ? { teamId: user.assignedTeamId }
-        : {};
+      const taskFilter =
+        user.role === 'manager'
+          ? { assignedTo: { $in: employees.map(e => e._id) } }
+          : {};
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const tasks = await Task.find(taskFilter).lean() as any[];
       taskSummary.total     = tasks.length;
@@ -110,10 +117,10 @@ export async function GET() {
       taskSummary.completed = tasks.filter((t: any) => t.status === 'completed').length;
     } catch { /* ignore */ }
 
-    // Pending approvals - sub_admin sees only their team's exceptions
+    // Pending approvals - manager sees only their team's exceptions
     let pendingApprovals = 0;
     try {
-      if (isSubAdmin(user) && user.assignedTeamId) {
+      if (user.role === 'manager') {
         const teamEmployeeIds = employees.map(e => e._id);
         pendingApprovals = await ExceptionRequest.countDocuments({
           status: 'pending',
@@ -126,9 +133,8 @@ export async function GET() {
 
     const attendanceRate    = total > 0 ? Math.round((presentCount / total) * 100) : 0;
     const onTimeRate        = presentCount > 0 ? Math.round((onTimeCount / Math.max(presentCount, 1)) * 100) : 0;
-    const taskCompletionRate = taskSummary.total > 0 ? Math.round((taskSummary.completed / taskSummary.total) * 100) : 72;
+    const taskCompletionRate = taskSummary.total > 0 ? Math.round((taskSummary.completed / taskSummary.total) * 100) : 0;
     const breakDiscipline   = Math.max(0, 100 - (breakCount * 5));
-    const healthScore       = Math.round((attendanceRate * 0.5) + (onTimeRate * 0.3) + (taskCompletionRate * 0.2));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const needAction: any[] = [];
@@ -139,12 +145,43 @@ export async function GET() {
       needAction.push({ type: 'attendance_drop', count: yesterdayPresent - presentCount, label: `Attendance drop vs yesterday: -${yesterdayPresent - presentCount}` });
     }
 
+    // Tracker compliance (all roles)
+    const trackerUsers = await User.find({ role: { $in: ['admin', 'manager', 'employee'] }, isApproved: { $ne: false } })
+      .select('_id')
+      .lean();
+    const trackerIds = trackerUsers.map(u => u._id);
+    const trackerTotal = trackerIds.length;
+    const trackerSubmittedToday = await Tracker.countDocuments({ date: today, employeeId: { $in: trackerIds }, isSubmitted: true });
+    const trackerEditedToday = await Tracker.countDocuments({ date: today, employeeId: { $in: trackerIds }, isEdited: true });
+    const weekStart = getISTDateDaysAgo(6);
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const trackerSubmittedWeek = await Tracker.countDocuments({ date: { $gte: weekStart, $lte: today }, employeeId: { $in: trackerIds }, isSubmitted: true });
+    const trackerSubmittedMonth = await Tracker.countDocuments({ date: { $gte: monthStart, $lte: today }, employeeId: { $in: trackerIds }, isSubmitted: true });
+    const trackerExpectedWeek = trackerTotal * 7;
+    const trackerExpectedMonth = trackerTotal * (new Date(today).getDate());
+    const trackerCompliance = {
+      daily: trackerTotal > 0 ? Math.round((trackerSubmittedToday / trackerTotal) * 100) : 0,
+      weekly: trackerExpectedWeek > 0 ? Math.round((trackerSubmittedWeek / trackerExpectedWeek) * 100) : 0,
+      monthly: trackerExpectedMonth > 0 ? Math.round((trackerSubmittedMonth / trackerExpectedMonth) * 100) : 0,
+      submittedToday: trackerSubmittedToday,
+      missingToday: Math.max(0, trackerTotal - trackerSubmittedToday),
+      editedToday: trackerEditedToday,
+    };
+
+    const healthScore = Math.round(
+      (attendanceRate * 0.45) +
+      (onTimeRate * 0.25) +
+      (taskCompletionRate * 0.2) +
+      (trackerCompliance.daily * 0.1)
+    );
+
     return NextResponse.json({
       ok: true, date: today,
       summary: { total, present: presentCount, absent: absentCount, late: lateCount, early: earlyCount, onTime: onTimeCount, onBreak: breakCount, inField: fieldCount, activeNow: presentCount },
       compare: { yesterdayPresent, presentDelta: presentCount - yesterdayPresent },
       healthScore,
       kpis: { attendance: attendanceRate, onTimeRate, taskCompletion: taskCompletionRate, breakDiscipline },
+      trackerCompliance,
       teamPulse, taskSummary, pendingApprovals, needAction,
     });
   } catch (e: unknown) {

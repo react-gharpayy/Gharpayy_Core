@@ -45,32 +45,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Your account is pending admin approval' }, { status: 403 });
     }
 
-    // Build token payload
-    // sub_admin: include assignedTeamId so API routes can enforce team scoping
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tokenPayload: Record<string, any> = {
       id:       user._id.toString(),
       email:    user.email,
       fullName: user.fullName,
       role:     user.role,
     };
-    if (user.role === 'sub_admin' && user.assignedTeamId) {
-      tokenPayload.assignedTeamId = user.assignedTeamId.toString();
-    }
 
     const token = signToken(tokenPayload);
 
-    // Build response payload (mirror token payload for client)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userResponse: Record<string, any> = {
       id:       user._id.toString(),
       email:    user.email,
       fullName: user.fullName,
       role:     user.role,
     };
-    if (user.role === 'sub_admin' && user.assignedTeamId) {
-      userResponse.assignedTeamId = user.assignedTeamId.toString();
-    }
 
     const res = NextResponse.json({ ok: true, user: userResponse });
     res.cookies.set(COOKIE_NAME, token, COOKIE_OPTIONS);

@@ -7,5 +7,6 @@ export default async function ReportsPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
   if (user.role === 'employee') redirect('/home');
+  if (user.role !== 'admin') redirect('/command-center');
   return <AdminLayout><Reports /></AdminLayout>;
 }

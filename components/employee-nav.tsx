@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Menu, X, Home, Clock, User, Bell } from 'lucide-react';
+import { Menu, X, Home, Clock, User, Bell, Calendar } from 'lucide-react';
 
 const EMPLOYEE_TABS = [
   { label: 'Home', href: '/home', icon: Home },
   { label: 'My Attendance', href: '/clock', icon: Clock },
+  { label: 'My Leaves', href: '/my-leaves', icon: Calendar },
   { label: 'My Profile', href: '/profile', icon: User },
   { label: 'Notices', href: '/notices', icon: Bell },
 ];

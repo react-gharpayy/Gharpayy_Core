@@ -28,9 +28,6 @@ export default function SignupPage() {
   const [officeZoneId, setOfficeZoneId] = useState('');
   const [profilePhoto, setProfilePhoto] = useState('');
   const [zoneLoading, setZoneLoading] = useState(true);
-  const [workStartTime, setWorkStartTime] = useState('10:00');
-  const [workEndTime, setWorkEndTime] = useState('19:00');
-  const [breakDuration, setBreakDuration] = useState(45);
 
   // Fetch office zones
   useEffect(() => {
@@ -84,9 +81,6 @@ export default function SignupPage() {
   const validateStep2 = () => {
     if (!dateOfBirth) { setError('Date of birth required'); return false; }
     if (!jobRole) { setError('Job role required'); return false; }
-    if (!workStartTime) { setError('Work start time required'); return false; }
-    if (!workEndTime) { setError('Work end time required'); return false; }
-    if (!Number.isFinite(Number(breakDuration)) || Number(breakDuration) < 0) { setError('Valid break duration required'); return false; }
     return true;
   };
 
@@ -126,9 +120,6 @@ export default function SignupPage() {
           jobRole,
           officeZoneId,
           profilePhoto,
-          workStartTime,
-          workEndTime,
-          breakDuration,
         }),
       });
 
@@ -259,26 +250,6 @@ export default function SignupPage() {
                       <span className="text-sm font-medium text-gray-700">Intern</span>
                     </label>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Work Start Time</label>
-                    <input type="time" value={workStartTime} onChange={e => { setWorkStartTime(e.target.value); setError(''); }}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 transition" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Work End Time</label>
-                    <input type="time" value={workEndTime} onChange={e => { setWorkEndTime(e.target.value); setError(''); }}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 transition" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Break Duration (minutes)</label>
-                  <input type="number" min={0} max={240} value={breakDuration}
-                    onChange={e => { setBreakDuration(Number(e.target.value)); setError(''); }}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 transition" />
                 </div>
 
                 <div className="flex gap-3 mt-6">

@@ -48,6 +48,24 @@ export async function getShiftRules() {
   return normalizeShiftRules(zone);
 }
 
+// Apply per-user work schedule over base rules when available
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyUserSchedule(base: ShiftRules, workSchedule?: any): ShiftRules {
+  if (!workSchedule) return base;
+  const shiftStart = typeof workSchedule.startTime === 'string' && workSchedule.startTime
+    ? workSchedule.startTime
+    : base.shiftStart;
+  const shiftEnd = typeof workSchedule.endTime === 'string' && workSchedule.endTime
+    ? workSchedule.endTime
+    : base.shiftEnd;
+  return {
+    shiftStart,
+    shiftEnd,
+    graceMinutes: base.graceMinutes,
+    earlyGraceMinutes: base.earlyGraceMinutes,
+  };
+}
+
 export function getStatusByShiftRules(checkInAt: Date, rules: ShiftRules) {
   const shiftStartMins = parseHHMM(rules.shiftStart) ?? parseHHMM(DEFAULT_SHIFT_RULES.shiftStart)!;
   const checkInMins = getISTMinutes(checkInAt);

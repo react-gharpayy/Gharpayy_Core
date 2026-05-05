@@ -33,8 +33,10 @@ export async function GET() {
 
     await connectDB();
 
+    const baseQuery = {};
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const users = await User.find({}, '-password')
+    const users = await User.find(baseQuery, '-password')
       .select('-profilePhoto')
       .populate('officeZoneId', 'name')
       .populate('managerId', 'fullName email role')
@@ -47,7 +49,7 @@ export async function GET() {
     const employees  = users.filter(u => u.role === 'employee');
 
     // Check if any employees have managerId assigned
-    const hasManagerAssignments = employees.some(e => e.managerId);
+    const hasManagerAssignments = employees.some(e => (e.managerId && (e.managerId as any)._id) || e.managerId);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let tree: any[] = [];
@@ -62,7 +64,10 @@ export async function GET() {
         team:     (mgr.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
         groupType: 'manager',
         reports:  employees
-          .filter(e => e.managerId?.toString() === mgr._id.toString())
+          .filter(e => {
+            const mgrId = (e.managerId as any)?._id?.toString?.() || e.managerId?.toString?.() || null;
+            return mgrId === mgr._id.toString();
+          })
           .map(e => mapEmployee(e)),
       }));
     } else {
@@ -85,7 +90,10 @@ export async function GET() {
 
     // Unassigned = employees with no managerId AND no officeZoneId
     const unassigned = hasManagerAssignments
-      ? employees.filter(e => !e.managerId).map(e => mapEmployee(e))
+      ? employees.filter(e => {
+        const mgrId = (e.managerId as any)?._id?.toString?.() || e.managerId?.toString?.() || null;
+        return !mgrId;
+      }).map(e => mapEmployee(e))
       : []; // when grouping by zone, all should be in a zone
 
     // Available managers for dropdown (DB managers + static admin)
