@@ -60,7 +60,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'approve') {
-      const shiftType = (schedule?.shiftType || '').toString() as ShiftType;
+      // Backward compatibility: older admin UIs send only { employeeId, action: 'approve' }
+      // without schedule payload. Default to FT_MAIN in that case.
+      const shiftType = (schedule?.shiftType || 'FT_MAIN').toString() as ShiftType;
       const isCustom = shiftType === 'CUSTOM';
       const isKnown = shiftType === 'CUSTOM' || shiftType === 'FT_MAIN' || shiftType === 'FT_EARLY' || shiftType === 'INTERN_DAY';
       if (!isKnown) {
