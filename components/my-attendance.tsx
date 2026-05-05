@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import EmployeeSidebar from '@/components/employee-sidebar';
+import SelfieCapture from '@/components/selfie-capture';
 
 const BREAK_LIMIT_MINS = 45;
 
@@ -33,9 +34,10 @@ export default function MyAttendance() {
   const [loading, setLoading] = useState(true);
   const [clocking, setClocking] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const timerRef = useRef<any>(null);
+  const [, forceTick] = useState(0);
   const saveTimer = useRef<any>(null);
+  const [showSelfie, setShowSelfie] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ endpoint: string, body: any } | null>(null);
   const [checkins, setCheckins] = useState([
     { key: 'G1MYT', label: 'G1MYT', range: '10:30 AM - 12:00 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
     { key: 'G2MYT', label: 'G2MYT', range: '12:00 PM - 2:15 PM', status: 'idle', targetCount: 0, progressNote: '', startedAt: '', completedAt: '', mytAdded: 0, toursInPipeline: 0, toursDone: 0, callsDone: 0, connected: 0, mytWhoWillPayToday: 0, tenantsPaid: 0, doubts: '', problems: '' },
@@ -45,7 +47,7 @@ export default function MyAttendance() {
   const [history, setHistory] = useState<any[]>([]);
 
   const fetchStatus = () => {
-    fetch('/api/attendance/status', { cache: 'no-store' })
+    return fetch('/api/attendance/status', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { setAtt(d); })
       .catch(() => {})
@@ -74,37 +76,116 @@ export default function MyAttendance() {
       .catch(() => {});
   }, []);
 
-  // Live timer
+  // Global ticker for UI updates every second
   useEffect(() => {
-    clearInterval(timerRef.current);
-    if (att?.isCheckedIn && att?.firstCheckIn) {
-      const start = new Date(att.firstCheckIn).getTime();
-      const update = () => setElapsed(Math.floor((Date.now() - start) / 1000));
-      update();
-      timerRef.current = setInterval(update, 1000);
-    } else if (att?.totalWorkMins) {
-      setElapsed(att.totalWorkMins * 60);
+    const interval = setInterval(() => {
+      forceTick(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getLiveWorkSeconds = () => {
+    if (!att) return 0;
+    if (!att.isCheckedIn && !att.isOnBreak && !att.isInField) {
+      return 0; // Reset to zero when fully clocked out
     }
-    return () => clearInterval(timerRef.current);
-  }, [att?.isCheckedIn, att?.firstCheckIn, att?.totalWorkMins]);
+    let total = (att.totalWorkMins || 0) * 60;
+    if (att.isCheckedIn && !att.isOnBreak && att.sessions?.length > 0) {
+      const lastSession = att.sessions[att.sessions.length - 1];
+      if (lastSession?.checkIn && !lastSession?.checkOut) {
+        const now = Date.now();
+        const checkIn = new Date(lastSession.checkIn).getTime();
+        total += Math.floor((now - checkIn) / 1000);
+      }
+    }
+    return total;
+  };
 
   const flash = (text: string, ok: boolean) => {
     setMsg({ text, ok });
     setTimeout(() => setMsg(null), 3000);
   };
 
-  const doAction = async (endpoint: string, body: object = {}) => {
+  const doAction = async (endpoint: string, body: any = {}) => {
     setClocking(true);
+    flash('Verifying location...', true);
     try {
-      const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const pos = await new Promise<GeolocationPosition>((res, rej) => {
+        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 8000 });
+      }).catch(() => null);
+
+      if (!pos) {
+        flash('Location required for attendance.', false);
+        setClocking(false);
+        return;
+      }
+
+      const finalBody = {
+        ...body,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      };
+
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(finalBody)
+      });
       const d = await r.json();
-      if (d.ok) { flash(getSuccessMsg(body), true); fetchStatus(); }
-      else flash(d.error || 'Failed', false);
-    } catch { flash('Network error', false); }
+      
+      if (d.ok || d.success) {
+        flash(getSuccessMsg(body, endpoint), true);
+        
+        // Optimistic UI Update to hide latency on Vercel
+        setAtt((prev: any) => {
+          if (!prev) return prev;
+          if (endpoint.includes('checkout')) {
+            return { ...prev, isCheckedIn: false, isOnBreak: body.type === 'break_start', isInField: body.type === 'field_exit' };
+          }
+          if (endpoint.includes('checkin')) {
+            return { ...prev, isCheckedIn: true, isOnBreak: false, isInField: false };
+          }
+          return prev;
+        });
+
+        fetchStatus();
+      } else {
+        flash(d.error || 'Verification failed.', false);
+      }
+    } catch (err) {
+      console.error("ACTION FAILED:", err);
+      flash('Network error or server failed.', false);
+    }
     setClocking(false);
   };
 
-  const getSuccessMsg = (body: any) => {
+  const handleActionWithSelfie = (endpoint: string, body: any) => {
+    setPendingAction({ endpoint, body });
+    setShowSelfie(true);
+  };
+
+  const onSelfieCaptured = async (image: string, faceFingerprint?: string) => {
+    if (!pendingAction) return;
+    const action = pendingAction;
+    
+    try {
+      await doAction(action.endpoint, { 
+        ...action.body, 
+        selfieImage: image,
+        faceFingerprint: faceFingerprint || ''
+      });
+
+      setPendingAction(null);
+      setShowSelfie(false);
+    } catch (err) {
+      console.error("CAPTURE FLOW ERROR:", err);
+      setPendingAction(null);
+      setShowSelfie(false);
+    }
+  };
+
+  const getSuccessMsg = (body: any, endpoint: string) => {
+    if (endpoint.includes('checkout') && !body.type) return 'Clocked out successfully';
     if (!body.type) return 'Clocked in successfully';
     if (body.type === 'break_start') return 'Break started';
     if (body.type === 'break_end') return 'Break ended - welcome back';
@@ -213,7 +294,7 @@ export default function MyAttendance() {
             {/* Big Timer */}
             <div className="text-center my-6">
               <div className="text-5xl font-bold tracking-widest" style={{ color: modeColor[workMode], fontVariantNumeric: 'tabular-nums' }}>
-                {fmtClock(elapsed)}
+                {fmtClock(getLiveWorkSeconds())}
               </div>
               <div className="text-xs mt-2" style={{ color: '#6b7280' }}>Total Work Hours Today</div>
               {att?.checkInTime && (
@@ -257,19 +338,14 @@ export default function MyAttendance() {
             ) : (
               <div className="space-y-3">
                 {/* Not clocked in */}
-                {!att?.isCheckedIn && !att?.isOnBreak && !att?.isInField && !att?.isOffToday && (
-                  <button onClick={() => doAction('/api/attendance/checkin', {})} disabled={clocking}
+                {!att?.isCheckedIn && !att?.isOnBreak && !att?.isInField && (
+                  <button onClick={() => handleActionWithSelfie('/api/attendance/checkin', {})} disabled={clocking}
                     className="w-full py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50"
                     style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>
-                    {clocking ? '...' : 'Clock In'}
+                    {clocking ? 'VERIFYING...' : 'CLOCK IN WITH SELFIE'}
                   </button>
                 )}
-                {!att?.isCheckedIn && !att?.isOnBreak && !att?.isInField && att?.isOffToday && (
-                  <div className="w-full py-3.5 rounded-2xl text-sm font-semibold text-center"
-                    style={{ background: 'rgba(37,99,235,0.1)', color: '#2563eb', border: '1px solid rgba(37,99,235,0.2)' }}>
-                    Off Duty Today
-                  </div>
-                )}
+
 
                 {/* Clocked in */}
                 {att?.isCheckedIn && (
@@ -279,7 +355,7 @@ export default function MyAttendance() {
                       style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}>
                       Start Break
                     </button>
-                    <button onClick={() => doAction('/api/attendance/checkout', {})} disabled={clocking}
+                    <button onClick={() => handleActionWithSelfie('/api/attendance/checkout', {})} disabled={clocking}
                       className="py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50"
                       style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
                       Clock Out
@@ -289,7 +365,7 @@ export default function MyAttendance() {
 
                 {/* On break */}
                 {att?.isOnBreak && (
-                  <button onClick={() => doAction('/api/attendance/checkin', { type: 'break_end' })} disabled={clocking}
+                  <button onClick={() => handleActionWithSelfie('/api/attendance/checkin', { type: 'break_end' })} disabled={clocking}
                     className="w-full py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50"
                     style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)' }}>
                     End Break
@@ -568,6 +644,7 @@ export default function MyAttendance() {
 
         </div>
       </div>
+      <SelfieCapture open={showSelfie} onClose={() => setShowSelfie(false)} onCapture={onSelfieCaptured} />
     </div>
   );
 }

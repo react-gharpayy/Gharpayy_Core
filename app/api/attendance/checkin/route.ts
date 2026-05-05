@@ -38,9 +38,29 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (user.role === 'admin') return NextResponse.json({ error: 'Admin cannot use attendance' }, { status: 400 });
 
-    const { lat, lng, type } = await req.json().catch(() => ({ lat: null, lng: null, type: null }));
+    const body = await req.json().catch(() => ({}));
+    const { lat, lng, type, selfieImage } = body;
     await connectDB();
     await autoCloseMissedClockOut(user.id);
+
+    if (!selfieImage && type !== 'break_end' && type !== 'field_return') {
+       return NextResponse.json({ ok: false, error: 'Selfie verification is mandatory.' }, { status: 400 });
+    }
+
+    const OFFICE_LAT = 12.9348;
+    const OFFICE_LNG = 77.6112;
+    const OFFICE_RADIUS = 150;
+
+    const haversine = (l1: number, n1: number, l2: number, n2: number) => {
+      const R = 6371000;
+      const dLat = (l2 - l1) * Math.PI / 180;
+      const dLng = (n2 - n1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(l1 * Math.PI / 180) * Math.cos(l2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const dist = (lat && lng) ? haversine(lat, lng, OFFICE_LAT, OFFICE_LNG) : 999999;
+    const inOffice = dist <= OFFICE_RADIUS;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dbUser = await User.findById(user.id).select('workSchedule').lean() as any;
     const baseRules = await getShiftRules();
@@ -84,7 +104,7 @@ export async function POST(req: NextRequest) {
         last.checkOut = now;
         last.minutes = mins;
       }
-      att.sessions.push({ checkIn: now, checkOut: null, type: 'work', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null });
+      att.sessions.push({ checkIn: now, checkOut: null, type: 'work', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice, selfieImage });
       att.isCheckedIn = true;
       att.isOnBreak = false;
       att.workMode = 'Present';
@@ -103,7 +123,7 @@ export async function POST(req: NextRequest) {
         last.minutes = mins;
         last.workMinutes = mins;
       }
-      att.sessions.push({ checkIn: now, checkOut: null, type: 'work', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null });
+      att.sessions.push({ checkIn: now, checkOut: null, type: 'work', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice, selfieImage });
       att.isCheckedIn = true;
       att.isInField = false;
       att.workMode = 'Present';
@@ -125,7 +145,7 @@ export async function POST(req: NextRequest) {
         dayStatus: status.dayStatus,
         lateByMins: status.lateByMins,
         earlyByMins: status.earlyByMins,
-        sessions: [{ checkIn: now, checkOut: null, type: sessionType, minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null }],
+        sessions: [{ checkIn: now, checkOut: null, type: sessionType, minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice, selfieImage }],
         totalWorkMins: 0,
         totalBreakMins: 0,
         isCheckedIn: true,
@@ -134,7 +154,7 @@ export async function POST(req: NextRequest) {
         workMode: 'Present',
       });
     } else {
-      att.sessions.push({ checkIn: now, checkOut: null, type: sessionType, minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null });
+      att.sessions.push({ checkIn: now, checkOut: null, type: sessionType, minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice, selfieImage });
       att.isCheckedIn = true;
       att.workMode = 'Present';
       if (att.sessions.length === 1) {
