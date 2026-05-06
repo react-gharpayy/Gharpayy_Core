@@ -2,8 +2,9 @@ export interface AuthPayload {
   id: string;
   email: string;
   fullName: string;
-  role: 'admin' | 'manager' | 'employee' | 'sub_admin';
+  role: 'admin' | 'manager' | 'employee' | 'sub_admin' | 'hr';
   assignedTeamId?: string;
+  playbookRole?: string;
 }
 
 export interface LeaveBalance {

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
-    const dist = (lat && lng) ? haversine(lat, lng, OFFICE_LAT, OFFICE_LNG) : 999999;
+    const dist = (lat != null && lng != null) ? haversine(lat, lng, OFFICE_LAT, OFFICE_LNG) : 999999;
     const inOffice = dist <= OFFICE_RADIUS;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dbUser = await User.findById(user.id).select('workSchedule').lean() as any;

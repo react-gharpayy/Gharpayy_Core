@@ -28,7 +28,7 @@ function fmtMins(m: number) {
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || !['admin', 'manager'].includes(user.role)) {
+    if (!user || !['admin', 'manager', 'hr'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -41,7 +41,10 @@ export async function GET(req: NextRequest) {
     if (!emp) return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
 
     const today = getISTDateStr();
-    const att   = await Attendance.findOne({ employeeId, date: today });
+    // Fetch as Mongoose doc for recomputeAttendanceTotals/save operations
+    const att = await Attendance.findOne({ employeeId, date: today });
+    // Fetch as lean (raw MongoDB) to read selfieImage which may not be in cached schema
+    const attLean = await Attendance.findOne({ employeeId, date: today }, { sessions: 1 }).lean() as any;
     const baseRules = await getShiftRules();
     const rules = applyUserSchedule(baseRules, emp?.workSchedule);
 
@@ -52,7 +55,7 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const monthRows = await Attendance.find({ employeeId, date: { $gte: startDate, $lte: today } }).lean() as any[];
 
-    const timeline: { time: string; label: string; type: string }[] = [];
+    const timeline: { time: string; label: string; type: string; hasSelfie?: boolean; sessionIndex?: number; lat?: number | null; lng?: number | null; inOffice?: boolean }[] = [];
     if (att) {
       recomputeAttendanceTotals(att);
       const derived = deriveStatusFromAttendance(att, rules);
@@ -62,18 +65,38 @@ export async function GET(req: NextRequest) {
         att.earlyByMins = derived.earlyByMins;
         await att.save();
       }
-      for (const s of att.sessions) {
+      att.sessions.forEach((s: any, idx: number) => {
+        // Read selfieImage from the lean (raw) copy to bypass schema cache
+        const rawSession = attLean?.sessions?.[idx];
+        // Determine the correct label for work sessions based on what came before
+        const prevSession = idx > 0 ? att.sessions[idx - 1] : null;
+        const workLabel =
+          idx === 0 ? 'Clocked In' :
+          prevSession?.type === 'break' ? 'Break Ended' :
+          prevSession?.type === 'field' ? 'Returned from Field' :
+          'Clocked In';
+
         if (s.type === 'break') {
-          timeline.push({ time: fmtTime(new Date(s.checkIn)), label: 'Break Started',  type: 'break_start' });
+          timeline.push({ time: fmtTime(new Date(s.checkIn)), label: 'Break Started', type: 'break_start' });
           if (s.checkOut) timeline.push({ time: fmtTime(new Date(s.checkOut)), label: 'Break Ended', type: 'break_end' });
         } else if (s.type === 'field') {
-          timeline.push({ time: fmtTime(new Date(s.checkIn)), label: 'Field Exit',    type: 'field_exit' });
+          timeline.push({ time: fmtTime(new Date(s.checkIn)), label: 'Field Exit', type: 'field_exit', lat: s.lat, lng: s.lng });
           if (s.checkOut) timeline.push({ time: fmtTime(new Date(s.checkOut)), label: 'Field Return', type: 'field_return' });
         } else {
-          timeline.push({ time: fmtTime(new Date(s.checkIn)), label: 'Clocked In',    type: 'checkin' });
+          // All work sessions (initial clock-in, post-break resume, post-field return)
+          timeline.push({
+            time: fmtTime(new Date(s.checkIn)),
+            label: workLabel,
+            type: 'checkin',
+            hasSelfie: !!(rawSession?.selfieImage),
+            sessionIndex: idx,
+            lat: s.lat,
+            lng: s.lng,
+            inOffice: s.inOffice ?? rawSession?.inOffice ?? false,
+          });
           if (s.checkOut) timeline.push({ time: fmtTime(new Date(s.checkOut)), label: 'Clocked Out', type: 'checkout' });
         }
-      }
+      });
     }
 
     const lastSession = att?.sessions?.[att.sessions.length - 1];

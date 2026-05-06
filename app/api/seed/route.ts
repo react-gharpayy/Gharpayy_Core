@@ -37,6 +37,7 @@ export async function GET() {
 
     // Seed employee accounts (approved for convenience)
     const employees = [
+      { fullName: 'Hitesh Gharpayy', email: 'hitesh.gharpayy@gmail.com', role: 'employee' },
       { fullName: 'Satvik Sharma', email: 'satvik.gharpayy@gmail.com', role: 'employee' },
       { fullName: 'Pulkit Gupta', email: 'pulkit.gharpayy@gmail.com', role: 'employee' },
       { fullName: 'Sidhant Verma', email: 'siddhant.gharpayy@gmail.com', role: 'employee' },

@@ -192,7 +192,18 @@ export async function GET() {
       totalBreakFormatted: fmtMins(att.totalBreakMins || 0),
       lateByMins: att.lateByMins || 0,
       earlyByMins: att.earlyByMins || 0,
-      sessions: att.sessions,
+      // Strip selfieImage — it's large base64 data not needed by the employee status view
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sessions: att.sessions.map((s: any) => ({
+        checkIn: s.checkIn,
+        checkOut: s.checkOut,
+        type: s.type,
+        minutes: s.minutes,
+        workMinutes: s.workMinutes,
+        lat: s.lat,
+        lng: s.lng,
+        inOffice: s.inOffice,
+      })),
       dayStatus: att.dayStatus,
       shiftRules: rules,
       workSchedule: dbUser?.workSchedule || null,

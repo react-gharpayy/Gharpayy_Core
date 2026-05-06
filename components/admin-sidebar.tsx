@@ -3,13 +3,14 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, BarChart2, ClipboardList, ClipboardCheck,
-  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound, Calendar, Heart
+  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound, Calendar, Heart, Target
 } from 'lucide-react';
 import { getCurrentWeekInfo } from '@/lib/week-utils';
 import GiveKudoModal from '@/components/GiveKudoModal';
 
 const NAV_ITEMS = [
   { label: 'Workforce Overview', href: '/command-center', icon: LayoutDashboard },
+  { label: 'Arena Management', href: '/arena-admin', icon: Target },
   { label: 'Attendance Management', href: '/live-attendance', icon: Users },
   { label: 'Task Management Console', href: '/task-board', icon: ClipboardList },
   { label: 'Daily Updates', href: '/admin/tracker', icon: ClipboardList },
@@ -37,6 +38,7 @@ const MANAGER_ALLOWED = new Set([
   '/team-hierarchy',
   '/kpis',
   '/kudos',
+  '/arena-admin',
 ]);
 
 function initials(name: string) {
@@ -140,36 +142,36 @@ export default function AdminSidebar() {
               })}
             </div>
           </nav>
+        </div>
 
-          <div className="p-4 border-t border-gray-200 space-y-3 bg-white pb-8">
-            <button
-              onClick={() => setIsKudoModalOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition border border-orange-200/50 group"
-            >
-              <div className="w-6 h-6 rounded-lg bg-orange-50 flex items-center justify-center border border-orange-100 group-hover:scale-110 transition-transform">
-                <Heart className="w-3 h-3 text-orange-500 fill-orange-500" />
+        <div className="p-4 border-t border-gray-200 space-y-3 bg-white pb-8">
+          <button
+            onClick={() => setIsKudoModalOpen(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition border border-orange-200/50 group"
+          >
+            <div className="w-6 h-6 rounded-lg bg-orange-50 flex items-center justify-center border border-orange-100 group-hover:scale-110 transition-transform">
+              <Heart className="w-3 h-3 text-orange-500 fill-orange-500" />
+            </div>
+            <span>Give a kudo</span>
+          </button>
+          {user && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+              <div className="w-8 h-8 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                {initials(user.fullName || user.email)}
               </div>
-              <span>Give a kudo</span>
-            </button>
-            {user && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-                <div className="w-8 h-8 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                  {initials(user.fullName || user.email)}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-gray-800 truncate">{user.fullName || 'Admin'}</div>
-                  <div className="text-[11px] text-gray-700 truncate">{user.email || ''}</div>
-                </div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-gray-800 truncate">{user.fullName || 'Admin'}</div>
+                <div className="text-[11px] text-gray-700 truncate">{user.email || ''}</div>
               </div>
-            )}
-            <button
-              onClick={logout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-gray-600 hover:bg-gray-100 transition"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="font-medium">Sign Out</span>
-            </button>
-          </div>
+            </div>
+          )}
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-gray-600 hover:bg-gray-100 transition"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="font-medium">Sign Out</span>
+          </button>
         </div>
       </aside>
 
