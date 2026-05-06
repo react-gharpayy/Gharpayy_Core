@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 
     await connectDB();
 
-    const isManager = ['admin', 'manager', 'hr'].includes(user.role);
+    const isManager = user.role === 'admin' || user.role === 'manager';
     const todayStr  = getTodayIST();
     const logDate   = date || todayStr;
 
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const users = await User.find(userQuery, 'fullName email role playbookRole officeZoneId isApproved workSchedule')
+      const users = await User.find(userQuery, 'fullName email role officeZoneId isApproved workSchedule')
         .select('-profilePhoto')
         .populate('officeZoneId', 'name')
         .lean() as any[];
@@ -137,7 +137,6 @@ export async function GET(req: NextRequest) {
           employeeId:   u._id.toString(),
           employeeName: u.fullName,
           role:         u.role,
-          playbookRole: u.playbookRole || 'recruiter',
           team:         (u.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
           isApproved:   u.isApproved,
           days,
@@ -162,7 +161,6 @@ export async function GET(req: NextRequest) {
             employeeId:    u._id.toString(),
             employeeName:  u.fullName,
             role:          u.role,
-            playbookRole:  u.playbookRole || 'recruiter',
             team:          (u.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
             checkInTime:   firstSess?.checkIn ? fmtTime(new Date(firstSess.checkIn)) : null,
             isCheckedIn:   att?.isCheckedIn || false,

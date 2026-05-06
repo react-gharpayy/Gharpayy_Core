@@ -45,8 +45,7 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    const body = await req.json();
-    const { employeeId, action, schedule, playbookRole } = body;
+    const { employeeId, action, schedule } = await req.json();
     if (!employeeId || !action) {
       return NextResponse.json({ error: 'employeeId and action required' }, { status: 400 });
     }
@@ -117,7 +116,6 @@ export async function POST(req: NextRequest) {
         isLocked: true,
         setBy: 'admin',
       };
-      if (playbookRole) employee.playbookRole = playbookRole;
       employee.isApproved = true;
       await employee.save();
       return NextResponse.json({ ok: true, message: `Approved ${employee.fullName}` });
@@ -142,8 +140,7 @@ export async function PUT(req: NextRequest) {
 
     await connectDB();
 
-    const body = await req.json();
-    const { employeeId, jobRole, officeZoneId, playbookRole, isApproved } = body;
+    const { employeeId, jobRole, officeZoneId } = await req.json();
     if (!employeeId) return NextResponse.json({ error: 'employeeId required' }, { status: 400 });
 
     const employee = await User.findById(employeeId);
@@ -154,8 +151,6 @@ export async function PUT(req: NextRequest) {
     // Admin can only edit these fields
     if (jobRole) employee.jobRole = jobRole;
     if (officeZoneId) employee.officeZoneId = officeZoneId;
-    if (playbookRole) employee.playbookRole = playbookRole;
-    if (typeof isApproved === 'boolean') employee.isApproved = isApproved;
 
     await employee.save();
     return NextResponse.json({ ok: true, message: 'Employee updated', employee });

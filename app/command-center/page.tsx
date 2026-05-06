@@ -6,7 +6,7 @@ import CommandCenter from '@/components/command-center';
 export default async function CommandCenterPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
-  if (!['admin', 'manager', 'hr'].includes(user.role)) redirect('/home');
+  if (user.role === 'employee') redirect('/home');
   return (
     <AdminLayout>
       <CommandCenter />

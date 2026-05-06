@@ -1,15 +1,15 @@
 'use client';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Clock, ClipboardList, ClipboardCheck, Bell, TrendingUp, History, LogOut, Settings, Menu, X, Calendar, Heart, LayoutDashboard, Target, Users } from 'lucide-react';
+import { Clock, ClipboardList, ClipboardCheck, Bell, TrendingUp, History, LogOut, Settings, Menu, X, Calendar, Heart } from 'lucide-react';
 import WorkScheduleModal from '@/components/work-schedule-modal';
 import GiveKudoModal from '@/components/GiveKudoModal';
 import { getCurrentWeekInfo } from '@/lib/week-utils';
 
 const NAV_ITEMS = [
   { label: 'My Attendance', href: '/home', icon: Clock },
-  { label: 'Arena Console', href: '/arena', icon: Target },
   { label: 'Daily Updates', href: '/tracker', icon: ClipboardList },
+  { label: 'Weekly Tracker', href: '/daily-tracker', icon: ClipboardCheck },
   { label: 'My Leaves', href: '/my-leaves', icon: Calendar },
   { label: 'My Tasks', href: '/my-tasks', icon: ClipboardList },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },
@@ -17,12 +17,6 @@ const NAV_ITEMS = [
   { label: 'Kudos', href: '/kudos', icon: Heart },
   { label: 'My History', href: '/my-history', icon: History },
   { label: 'Settings', href: '/settings', icon: Settings },
-];
-
-const HR_NAV_ITEMS = [
-  ...NAV_ITEMS,
-  { label: 'Team Performance', href: '/arena-admin', icon: LayoutDashboard },
-  { label: 'Attendance Intelligence', href: '/live-attendance', icon: Users },
 ];
 
 function initials(name: string) {
@@ -82,7 +76,7 @@ export default function EmployeeSidebar() {
 
         <nav className="flex-1 px-3 py-4 overflow-y-auto no-scrollbar">
           <div className="space-y-1">
-            {(user?.role === 'hr' ? HR_NAV_ITEMS : NAV_ITEMS).map(item => {
+            {NAV_ITEMS.map(item => {
               const active = isActive(item.href);
               const isNotice = item.href === '/notices';
               return (
@@ -177,7 +171,7 @@ export default function EmployeeSidebar() {
 
       {mobileMenuOpen && (
         <div className="md:hidden fixed top-[57px] left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-          {(user?.role === 'hr' ? HR_NAV_ITEMS : NAV_ITEMS).map(item => {
+          {NAV_ITEMS.map(item => {
             const active = isActive(item.href);
             return (
               <button

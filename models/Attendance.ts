@@ -8,8 +8,6 @@ export interface ISession {
   workMinutes: number;
   lat: number | null;
   lng: number | null;
-  selfieImage?: string | null;
-  inOffice?: boolean;
 }
 
 export interface IAttendance extends Document {
@@ -37,8 +35,6 @@ const SessionSchema = new Schema<ISession>({
   workMinutes: { type: Number, default: 0 },
   lat:         { type: Number, default: null },
   lng:         { type: Number, default: null },
-  selfieImage: { type: String, default: null },
-  inOffice:    { type: Boolean, default: false },
 }, { _id: false });
 
 const AttendanceSchema = new Schema<IAttendance>({
@@ -59,4 +55,4 @@ const AttendanceSchema = new Schema<IAttendance>({
 AttendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 AttendanceSchema.index({ date: 1 });
 
-export default (mongoose.models.GpAttendance as mongoose.Model<IAttendance>) || mongoose.model<IAttendance>('GpAttendance', AttendanceSchema);
+export default mongoose.models.GpAttendance || mongoose.model<IAttendance>('GpAttendance', AttendanceSchema);

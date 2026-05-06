@@ -7,6 +7,6 @@ import LiveAttendance from '@/components/live-attendance';
 export default async function LiveAttendancePage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
-  if (!['admin', 'manager', 'hr'].includes(user.role)) redirect('/home');
+  if (user.role === 'employee') redirect('/home');
   return <AdminLayout><LiveAttendance /></AdminLayout>;
 }

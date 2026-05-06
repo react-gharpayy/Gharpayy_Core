@@ -6,6 +6,6 @@ import KPIsDashboard from '@/components/kpis-dashboard';
 export default async function KPIsPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
-  if (!['admin', 'manager', 'hr'].includes(user.role)) redirect('/my-performance');
+  if (user.role === 'employee') redirect('/my-performance');
   return <AdminLayout><KPIsDashboard /></AdminLayout>;
 }

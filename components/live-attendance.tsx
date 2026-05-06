@@ -1,12 +1,11 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { Filter, RefreshCw, ChevronRight, X, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Filter, RefreshCw, ChevronRight, X, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface Employee {
   employeeId: string;
   employeeName: string;
   role: string;
-  playbookRole: string;
   team: string;
   checkInTime: string | null;
   isCheckedIn: boolean;
@@ -24,17 +23,7 @@ interface DrillDown {
     isCheckedIn: boolean; dayStatus: string;
     firstCheckIn: string | null; lastCheckOut: string | null;
     totalWorkMins: number; totalWorkFormatted: string;
-    sessions: number;
-    timeline: {
-      time: string;
-      label: string;
-      type: string;
-      hasSelfie?: boolean;
-      sessionIndex?: number;
-      lat?: number | null;
-      lng?: number | null;
-      inOffice?: boolean;
-    }[];
+    sessions: number; timeline: { time: string; label: string; type: string }[];
   } | null;
 }
 
@@ -80,57 +69,6 @@ function getTodayIST() { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toIS
 
 const FILTERS = ['All', 'Present', 'Break', 'Field', 'Absent'];
 
-function SelfieThumbnail({ employeeId, sessionIndex, date, onClick, cache }: any) {
-  const [image, setImage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const cacheKey = `${employeeId}-${sessionIndex}-${date}`;
-    if (cache.current[cacheKey]) {
-      setImage(cache.current[cacheKey]);
-      setLoading(false);
-      return;
-    }
-
-    fetch(`/api/attendance/selfie?employeeId=${employeeId}&sessionIndex=${sessionIndex}&date=${date}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.selfieImage) {
-          setImage(d.selfieImage);
-          cache.current[cacheKey] = d.selfieImage;
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [employeeId, sessionIndex, date, cache]);
-
-  return (
-    <button
-      onClick={onClick}
-      className="relative flex-shrink-0 rounded-xl overflow-hidden border-2 transition hover:opacity-90 active:scale-95 group shadow-sm"
-      style={{ borderColor: 'rgba(16,185,129,0.4)', width: 72, height: 72, background: '#f0fdf4' }}
-    >
-      {loading ? (
-        <div className="w-full h-full flex items-center justify-center">
-           <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
-        </div>
-      ) : image ? (
-        <>
-          <img src={image} className="w-full h-full object-cover" alt="Selfie" />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-             <span className="text-[8px] font-black text-white uppercase tracking-widest">Expand</span>
-          </div>
-        </>
-      ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-          <XCircle className="w-4 h-4 text-gray-300" />
-          <span className="text-[8px] font-bold text-gray-400 uppercase">Missing</span>
-        </div>
-      )}
-    </button>
-  );
-}
-
 export default function LiveAttendance() {
   const [all, setAll] = useState<Employee[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -159,10 +97,6 @@ export default function LiveAttendance() {
   const [breakRows, setBreakRows] = useState<any[]>([]);
   const [breakWeekly, setBreakWeekly] = useState<any[]>([]);
   const [breakLoading, setBreakLoading] = useState(false);
-  const [selfieModal, setSelfieModal] = useState<{ image: string; lat?: number | null; lng?: number | null; inOffice?: boolean } | null>(null);
-  const [playbookRoles, setPlaybookRoles] = useState<any[]>([]);
-  // Cache loaded selfies so we don't re-fetch on re-render: key = "employeeId-sessionIndex-date"
-  const selfieCache = useRef<Record<string, string>>({});
 
   const fetchData = useCallback((date = selectedDate, zone = selectedZone, manager = selectedManager, status = statusFilter, from = dateFrom, to = dateTo, useRange = rangeMode) => {
     setLoading(true);
@@ -233,7 +167,6 @@ export default function LiveAttendance() {
       });
     }).catch(() => {});
     fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.role) setUserRole(d.role); }).catch(() => {});
-    fetch('/api/arena/roles').then(r => r.json()).then(d => { if (d?.roles) setPlaybookRoles(d.roles); }).catch(() => {});
     const interval = setInterval(() => fetchData(), 60000);
     return () => clearInterval(interval);
   }, []);
@@ -266,36 +199,6 @@ export default function LiveAttendance() {
     setDrillLoading(true); setDrill(null);
     try { const r = await fetch(`/api/attendance/employee?id=${empId}`); setDrill(await r.json()); } catch {}
     setDrillLoading(false);
-  };
-
-  // Lazy-load a selfie image and open the lightbox
-  const openSelfie = async (
-    employeeId: string,
-    sessionIndex: number,
-    date: string,
-    lat?: number | null,
-    lng?: number | null,
-    inOffice?: boolean,
-  ) => {
-    const cacheKey = `${employeeId}-${sessionIndex}-${date}`;
-    if (selfieCache.current[cacheKey]) {
-      setSelfieModal({ image: selfieCache.current[cacheKey], lat, lng, inOffice });
-      return;
-    }
-    // Show loading state in modal immediately
-    setSelfieModal({ image: '', lat, lng, inOffice });
-    try {
-      const r = await fetch(`/api/attendance/selfie?employeeId=${employeeId}&sessionIndex=${sessionIndex}&date=${date}`);
-      const d = await r.json();
-      if (d.selfieImage) {
-        selfieCache.current[cacheKey] = d.selfieImage;
-        setSelfieModal({ image: d.selfieImage, lat, lng, inOffice });
-      } else {
-        setSelfieModal(null);
-      }
-    } catch {
-      setSelfieModal(null);
-    }
   };
 
   const card = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 20, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' };
@@ -486,9 +389,7 @@ export default function LiveAttendance() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 truncate">{emp.employeeName}</div>
-                    <div className="text-[10px]" style={{ color: '#6b7280' }}>
-                      {playbookRoles.find(r => r.slug === (emp as any).playbookRole)?.name || (emp as any).playbookRole || 'Recruiter'} · {emp.team}
-                    </div>
+                    <div className="text-[10px]" style={{ color: '#6b7280' }}>{emp.team}</div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="text-right">
@@ -602,9 +503,7 @@ export default function LiveAttendance() {
                     </div>
                     <div>
                       <div className="font-bold text-gray-900">{drill.employee.fullName}</div>
-                      <div className="text-xs capitalize" style={{ color: '#6b7280' }}>
-                        {playbookRoles.find(r => r.slug === drill.employee.role)?.name || drill.employee.role} - {drill.employee.email}
-                      </div>
+                      <div className="text-xs capitalize" style={{ color: '#6b7280' }}>{drill.employee.role} - {drill.employee.email}</div>
                     </div>
                   </div>
                   <button onClick={() => setDrill(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 transition"
@@ -638,54 +537,11 @@ export default function LiveAttendance() {
                           <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#6b7280' }}>Timeline</div>
                           <div className="space-y-2">
                             {drill.attendance.timeline.map((ev, i) => (
-                              <div key={i} className="rounded-xl overflow-hidden"
-                                style={{ background: ev.type === 'checkin' ? 'rgba(16,185,129,0.08)' : '#f9fafb', border: `1px solid ${ev.type === 'checkin' ? 'rgba(16,185,129,0.15)' : '#f3f4f6'}` }}>
-                                <div className="flex items-center gap-3 p-3">
-                                  {ev.type === 'checkin' ? <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0"/> : <XCircle className="w-4 h-4 flex-shrink-0" style={{ color: '#6b7280' }}/>}
-                                  <span className="text-sm flex-1" style={{ color: '#374151' }}>{ev.label}</span>
-                                  <span className="text-xs" style={{ color: '#6b7280' }}>{ev.time}</span>
-                                </div>
-
-                                {/* Selfie + Location — only for clock-in events */}
-                                {ev.type === 'checkin' && (ev.hasSelfie || (ev.lat && ev.lng)) && (
-                                  <div className="px-3 pb-3 flex gap-2">
-                                    {ev.hasSelfie && ev.sessionIndex !== undefined && (
-                                      <SelfieThumbnail 
-                                        employeeId={drill.employee._id}
-                                        sessionIndex={ev.sessionIndex}
-                                        date={selectedDate}
-                                        cache={selfieCache}
-                                        onClick={() => openSelfie(drill.employee._id, ev.sessionIndex!, selectedDate, ev.lat, ev.lng, ev.inOffice)}
-                                      />
-                                    )}
-                                    {ev.lat && ev.lng && (
-                                      <a
-                                        href={`https://www.google.com/maps?q=${ev.lat},${ev.lng}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex-1 flex flex-col justify-center gap-1 px-3 py-2 rounded-xl transition hover:opacity-80"
-                                        style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}
-                                      >
-                                        <div className="flex items-center gap-1.5">
-                                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="#3b82f6" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                          </svg>
-                                          <span className="text-xs font-semibold" style={{ color: '#3b82f6' }}>View on Map</span>
-                                          {ev.inOffice !== undefined && (
-                                            <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                                              style={{ background: ev.inOffice ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: ev.inOffice ? '#10b981' : '#f59e0b' }}>
-                                              {ev.inOffice ? 'In Office' : 'Outside'}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-[10px]" style={{ color: '#6b7280' }}>
-                                          {ev.lat.toFixed(5)}, {ev.lng.toFixed(5)}
-                                        </div>
-                                      </a>
-                                    )}
-                                  </div>
-                                )}
+                              <div key={i} className="flex items-center gap-3 p-3 rounded-xl"
+                                style={{ background: ev.type === 'checkin' ? 'rgba(16,185,129,0.08)' : '#f9fafb', border: `1px solid ${ev.type === 'checkin' ? 'rgba(16,185,129,0.15)' : '#f9fafb'}` }}>
+                                {ev.type === 'checkin' ? <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0"/> : <XCircle className="w-4 h-4 flex-shrink-0" style={{ color: '#6b7280' }}/>}
+                                <span className="text-sm flex-1" style={{ color: '#374151' }}>{ev.label}</span>
+                                <span className="text-xs" style={{ color: '#6b7280' }}>{ev.time}</span>
                               </div>
                             ))}
                           </div>
@@ -696,70 +552,6 @@ export default function LiveAttendance() {
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Selfie lightbox */}
-      {selfieModal && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.88)' }}
-          onClick={() => setSelfieModal(null)}
-        >
-          <div
-            className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {selfieModal.image ? (
-              <img src={selfieModal.image} alt="Clock-in selfie" className="w-full block" />
-            ) : (
-              <div className="w-full flex items-center justify-center" style={{ height: 280, background: '#111827' }}>
-                <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
-              </div>
-            )}
-
-            {/* Location bar */}
-            {selfieModal.lat && selfieModal.lng && (
-              <div className="flex items-center gap-3 px-4 py-3" style={{ background: '#111827' }}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="#3b82f6" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className="text-xs font-semibold text-white truncate">
-                      {selfieModal.lat.toFixed(5)}, {selfieModal.lng.toFixed(5)}
-                    </span>
-                    {selfieModal.inOffice !== undefined && (
-                      <span className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ background: selfieModal.inOffice ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)', color: selfieModal.inOffice ? '#10b981' : '#f59e0b' }}>
-                        {selfieModal.inOffice ? 'In Office' : 'Outside'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <a
-                  href={`https://www.google.com/maps?q=${selfieModal.lat},${selfieModal.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold"
-                  style={{ background: '#3b82f6', color: '#fff' }}
-                >
-                  Open Map
-                </a>
-              </div>
-            )}
-
-            {/* Close button */}
-            <button
-              onClick={() => setSelfieModal(null)}
-              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full"
-              style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
         </div>
       )}

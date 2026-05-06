@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
 
-    const dist = (lat != null && lng != null) ? haversine(lat, lng, OFFICE_LAT, OFFICE_LNG) : 999999;
+    const dist = (lat && lng) ? haversine(lat, lng, OFFICE_LAT, OFFICE_LNG) : 999999;
     const inOffice = dist <= OFFICE_RADIUS;
 
     if (!selfieImage && !type) {

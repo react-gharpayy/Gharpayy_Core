@@ -14,8 +14,6 @@ export interface IUser extends Document {
   managerId?: mongoose.Types.ObjectId;
   teamName?: string;
   department?: string;
-  playbookRole?: string;
-  activeSessionToken?: string;
   workSchedule?: {
     shiftType?: 'FT_MAIN' | 'FT_EARLY' | 'INTERN_DAY' | 'CUSTOM';
     startTime: string;
@@ -74,8 +72,6 @@ const UserSchema = new Schema({
   managerId:    { type: Schema.Types.ObjectId, ref: 'GpAttUser', default: null },
   teamName:     { type: String, default: '' },
   department:   { type: String, default: '' },
-  playbookRole: { type: String, default: 'recruiter' },
-  activeSessionToken: { type: String, default: null },
   workSchedule: { type: WorkScheduleSchema, default: () => ({}) },
   leaves:       { type: [LeaveSchema], default: [] },
   createdAt:    { type: Date, default: Date.now },

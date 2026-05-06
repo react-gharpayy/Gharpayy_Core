@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth';
-import mongoose from 'mongoose';
 
 export async function GET() {
   try {
@@ -10,20 +9,15 @@ export async function GET() {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
+    
     await connectDB();
-
-    // Build query — exclude current user if they have a valid ObjectId
-    let query: object = {};
-    if (user.id !== 'admin' && mongoose.Types.ObjectId.isValid(user.id)) {
-      query = { _id: { $ne: new mongoose.Types.ObjectId(user.id) } };
-    }
-
+    
+    // Fetch all employees except the current user
     const employees = await User.find(
-      query,
+      { _id: { $ne: user.id } }, 
       'fullName email profilePhoto'
     ).lean();
-
+    
     return NextResponse.json({ employees });
   } catch (e: unknown) {
     console.error('API error:', e);
