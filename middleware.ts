@@ -17,7 +17,7 @@ const PUBLIC = [
   // NOTE: /api/seed intentionally removed from public routes (security fix)
 ];
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get('gp_att_token')?.value;
 

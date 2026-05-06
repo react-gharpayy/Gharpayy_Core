@@ -106,37 +106,41 @@ export default function MyAttendance() {
     setTimeout(() => setMsg(null), 3000);
   };
 
+  const getLocation = (): Promise<GeolocationPosition | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) { resolve(null); return; }
+      // Resolve with null on error — location is best-effort, not a hard gate
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve(pos),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+      );
+    });
+  };
+
   const doAction = async (endpoint: string, body: any = {}) => {
     setClocking(true);
-    flash('Verifying location...', true);
+    flash('Verifying...', true);
     try {
-      const pos = await new Promise<GeolocationPosition>((res, rej) => {
-        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 8000 });
-      }).catch(() => null);
-
-      if (!pos) {
-        flash('Location required for attendance.', false);
-        setClocking(false);
-        return;
-      }
+      const pos = await getLocation();
 
       const finalBody = {
         ...body,
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
+        lat: pos?.coords.latitude ?? null,
+        lng: pos?.coords.longitude ?? null,
       };
 
       const r = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(finalBody)
+        body: JSON.stringify(finalBody),
       });
       const d = await r.json();
-      
+
       if (d.ok || d.success) {
         flash(getSuccessMsg(body, endpoint), true);
-        
-        // Optimistic UI Update to hide latency on Vercel
+
+        // Optimistic UI update
         setAtt((prev: any) => {
           if (!prev) return prev;
           if (endpoint.includes('checkout')) {
@@ -150,13 +154,14 @@ export default function MyAttendance() {
 
         fetchStatus();
       } else {
-        flash(d.error || 'Verification failed.', false);
+        flash(d.error || 'Action failed. Please try again.', false);
       }
-    } catch (err) {
-      console.error("ACTION FAILED:", err);
-      flash('Network error or server failed.', false);
+    } catch {
+      flash('Network error. Please check your connection and try again.', false);
+    } finally {
+      // Always reset — no path can leave the button stuck
+      setClocking(false);
     }
-    setClocking(false);
   };
 
   const handleActionWithSelfie = (endpoint: string, body: any) => {
@@ -167,20 +172,19 @@ export default function MyAttendance() {
   const onSelfieCaptured = async (image: string, faceFingerprint?: string) => {
     if (!pendingAction) return;
     const action = pendingAction;
-    
+    // Clear pending state immediately to prevent double-submit
+    setPendingAction(null);
+    setShowSelfie(false);
+
     try {
-      await doAction(action.endpoint, { 
-        ...action.body, 
+      await doAction(action.endpoint, {
+        ...action.body,
         selfieImage: image,
         faceFingerprint: faceFingerprint || ''
       });
-
-      setPendingAction(null);
-      setShowSelfie(false);
     } catch (err) {
       console.error("CAPTURE FLOW ERROR:", err);
-      setPendingAction(null);
-      setShowSelfie(false);
+      // doAction's finally block handles setClocking(false)
     }
   };
 

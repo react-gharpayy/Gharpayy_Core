@@ -1,15 +1,16 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth';
 import AdminLayout from '@/components/admin-layout';
-import CommandCenter from '@/components/command-center';
+import ArenaAdmin from '@/components/arena/ArenaAdmin';
 
-export default async function CommandCenterPage() {
+export default async function ArenaAdminPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
-  if (!['admin', 'manager', 'hr'].includes(user.role)) redirect('/home');
+  if (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'hr') redirect('/home');
+
   return (
     <AdminLayout>
-      <CommandCenter />
+      <ArenaAdmin />
     </AdminLayout>
   );
 }

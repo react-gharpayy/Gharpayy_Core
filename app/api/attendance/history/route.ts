@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
 import Attendance from '@/models/Attendance';
 import User from '@/models/User';
@@ -31,10 +32,24 @@ export async function GET(req: NextRequest) {
       employeeId = employeeIdParam;
     }
 
+    // Prevent CastError if user.id is 'admin' and no employeeIdParam is provided
+    if (employeeId === 'admin') {
+      return NextResponse.json({
+        ok: true,
+        range: null,
+        page,
+        limit,
+        total: 0,
+        totalPages: 1,
+        records: [],
+        summary: { totalDays: 0, presentDays: 0, absentDays: 0, lateDays: 0, earlyDays: 0, totalWorkMins: 0 },
+      });
+    }
+
     await connectDB();
     const range = start && end ? { start, end } : (month ? getMonthRange(month || undefined) : null);
 
-    const match: any = { employeeId };
+    const match: any = { employeeId: new mongoose.Types.ObjectId(employeeId) };
     if (range) match.date = { $gte: range.start, $lte: range.end };
     if (status) match.dayStatus = status;
 

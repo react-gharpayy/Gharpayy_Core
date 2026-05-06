@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
-import { signToken, COOKIE_NAME, COOKIE_OPTIONS } from '@/lib/auth';
+import { signToken, verifyToken, COOKIE_NAME, COOKIE_OPTIONS } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { loginSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
@@ -45,14 +45,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Your account is pending admin approval' }, { status: 403 });
     }
 
+    // Check for existing active session
+    if (user.activeSessionToken) {
+      const incomingToken = req.cookies.get(COOKIE_NAME)?.value;
+      if (incomingToken !== user.activeSessionToken) {
+        const existingSession = verifyToken(user.activeSessionToken);
+        if (existingSession) {
+          // If the token is still valid (not expired), prevent login
+          return NextResponse.json({ error: 'Already logged in at some other place.' }, { status: 403 });
+        }
+      }
+    }
+
     const tokenPayload: Record<string, any> = {
       id:       user._id.toString(),
       email:    user.email,
       fullName: user.fullName,
       role:     user.role,
+      playbookRole: user.playbookRole,
     };
 
     const token = signToken(tokenPayload);
+
+    // Save the new token as the active session
+    user.activeSessionToken = token;
+    await user.save();
 
     const userResponse: Record<string, any> = {
       id:       user._id.toString(),
