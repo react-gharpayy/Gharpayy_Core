@@ -76,17 +76,23 @@ export default function CommandCenter() {
   const [time, setTime] = useState('');
 
   const fetchData = useCallback(() => {
-    Promise.all([
-      fetch('/api/command-center', { cache: 'no-store' }).then(r => r.json()).catch(() => null),
-      fetch('/api/integrations/crm/daily', { cache: 'no-store' }).then(r => r.json()).catch(() => null),
-    ])
-      .then(([cc, crm]) => {
+    // Fetch command center data
+    fetch('/api/command-center', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(cc => {
         if (cc?.ok) setData(cc);
-        if (crm && !crm.error) setCrmDaily(crm);
-        else setCrmDaily(null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Fetch CRM data independently
+    fetch('/api/integrations/crm/daily', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(crm => {
+        if (crm && !crm.error) setCrmDaily(crm);
+        else setCrmDaily(null);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

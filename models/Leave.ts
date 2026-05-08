@@ -37,10 +37,13 @@ const LeaveSchema = new Schema<ILeave>({
   reviewedAt:      { type: Date, default: null },
   isHalfDay:       { type: Boolean, default: false },
   halfDaySession:  { type: String, enum: ['morning', 'afternoon', null], default: null },
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  collection: 'gpleaves'
+});
 
 LeaveSchema.index({ employeeId: 1, status: 1 });
 LeaveSchema.index({ startDate: 1, endDate: 1 });
 
-export default mongoose.models.GpLeave ||
+export default mongoose.models?.GpLeave ||
   mongoose.model<ILeave>('GpLeave', LeaveSchema);

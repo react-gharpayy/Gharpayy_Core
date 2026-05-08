@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     }
 
     const baseUrl = process.env.CRM_BASE_URL || '';
-    if (!baseUrl) return NextResponse.json({ error: 'CRM_BASE_URL is not set' }, { status: 500 });
+    if (!baseUrl) return NextResponse.json({ ok: false, data: [] });
 
     await connectDB();
     const keyDoc = await IntegrationKey.findOne({ orgId: String(user.id) }).lean();
@@ -28,9 +28,16 @@ export async function GET(req: NextRequest) {
       cache: 'no-store',
     });
 
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    if (!res.ok) {
+      const text = await res.text().catch(() => 'No body');
+      console.error('CRM_API_ERROR:', res.status, text);
+      return NextResponse.json({ error: `CRM API Error: ${res.status}` }, { status: res.status });
+    }
+
+    const data = await res.json().catch(() => ({}));
+    return NextResponse.json(data);
   } catch (error: any) {
+    console.error('CRM_ROUTE_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

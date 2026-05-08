@@ -78,8 +78,13 @@ const UserSchema = new Schema({
   activeSessionToken: { type: String, default: null },
   workSchedule: { type: WorkScheduleSchema, default: () => ({}) },
   leaves:       { type: [LeaveSchema], default: [] },
-  createdAt:    { type: Date, default: Date.now },
-  updatedAt:    { type: Date, default: Date.now },
+}, { 
+  timestamps: true,
+  collection: 'gpattusers'
 });
 
-export default mongoose.models.GpAttUser || mongoose.model('GpAttUser', UserSchema);
+UserSchema.index({ role: 1, isApproved: 1 });
+UserSchema.index({ officeZoneId: 1, role: 1 });
+UserSchema.index({ managerId: 1 });
+
+export default mongoose.models?.GpAttUser || mongoose.model('GpAttUser', UserSchema);

@@ -21,14 +21,16 @@ export function verifyToken(token: string): AuthPayload | null {
   catch { return null; }
 }
 
-export async function getAuthUser(): Promise<AuthPayload | null> {
+import { cache } from 'react';
+
+export const getAuthUser = cache(async (): Promise<AuthPayload | null> => {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE)?.value;
     if (!token) return null;
     return verifyToken(token);
   } catch { return null; }
-}
+});
 
 export const COOKIE_NAME = COOKIE;
 export const COOKIE_OPTIONS = {

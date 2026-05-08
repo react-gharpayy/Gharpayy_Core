@@ -95,9 +95,12 @@ const TrackerSchema = new Schema<ITracker>({
       problems: { type: String, default: '' },
     },
   ],
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  collection: 'gptrackers'
+});
 
 TrackerSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 TrackerSchema.index({ date: 1 });
 
-export default mongoose.models.GpTracker || mongoose.model<ITracker>('GpTracker', TrackerSchema);
+export default mongoose.models?.GpTracker || mongoose.model<ITracker>('GpTracker', TrackerSchema);

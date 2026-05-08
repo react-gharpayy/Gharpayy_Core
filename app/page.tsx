@@ -4,6 +4,10 @@ import { getAuthUser } from '@/lib/auth';
 export default async function Home() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
-  if (user.role === 'employee') redirect('/home');
+
+  // Employees → new operational dashboard
+  if (user.role === 'employee') redirect('/dashboard');
+
+  // All elevated roles → existing admin/manager workflows (unchanged)
   redirect('/command-center');
 }

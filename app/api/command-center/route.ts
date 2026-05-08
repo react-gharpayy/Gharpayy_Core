@@ -8,7 +8,8 @@ import Tracker from '@/models/Tracker';
 import '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr } from '@/lib/attendance-utils';
-import { isAdmin, isElevated, buildEmployeeFilter } from '@/lib/role-guards';
+import { buildEmployeeFilter } from '@/lib/role-guards';
+import mongoose from 'mongoose';
 
 function fmtTime(d: Date) {
   return new Date(d).toLocaleTimeString('en-IN', {
@@ -31,6 +32,7 @@ export async function GET() {
 
     await connectDB();
     const today = getISTDateStr();
+    const yDate = getISTDateDaysAgo(1);
 
     // Build employee filter - manager sees only their team
     const empFilter = buildEmployeeFilter(user, { isApproved: { $ne: false }, role: 'employee' });
@@ -41,42 +43,70 @@ export async function GET() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const employees = await User.find(empFilter, 'fullName email officeZoneId')
       .select('-profilePhoto')
-      .populate('officeZoneId', 'name').lean() as any[];
+      .lean() as any[];
 
     const total = employees.length;
+    const employeeIds = employees.map(e => e._id);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const todayAtt = await Attendance.find({
-      employeeId: { $in: employees.map(e => e._id) },
-      date: today,
-    }).lean() as any[];
+    // Parallelize independent data fetching
+    const [todayAtt, yAtt, taskStats, pendingApprovals, trackerStats] = await Promise.all([
+      Attendance.find({ employeeId: { $in: employeeIds }, date: today }).lean(),
+      Attendance.find({ employeeId: { $in: employeeIds }, date: yDate }).lean(),
+      (async () => {
+        const taskFilter = user.role === 'manager' ? { assignedTo: { $in: employeeIds } } : {};
+        const [total, blocked, completed, overdue] = await Promise.all([
+          Task.countDocuments(taskFilter),
+          Task.countDocuments({ ...taskFilter, status: 'blocked' }),
+          Task.countDocuments({ ...taskFilter, status: 'completed' }),
+          Task.countDocuments({ ...taskFilter, status: { $nin: ['completed', 'cancelled'] }, dueDate: { $lt: today } }),
+        ]);
+        return { total, blocked, completed, overdue };
+      })(),
+      (async () => {
+        if (user.role === 'manager') {
+          return ExceptionRequest.countDocuments({ status: 'pending', employeeId: { $in: employeeIds } });
+        }
+        return ExceptionRequest.countDocuments({ status: 'pending' });
+      })(),
+      (async () => {
+        const trackerFilter: any = user.role === 'manager' 
+          ? { employeeId: { $in: employeeIds } } 
+          : {};
+        
+        const trackerTotal = user.role === 'manager' 
+          ? total 
+          : await User.countDocuments({ role: { $in: ['admin', 'manager', 'employee'] }, isApproved: { $ne: false } });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const attMap = new Map(todayAtt.map((a: any) => [a.employeeId.toString(), a]));
+        const weekStart = getISTDateDaysAgo(6);
+        const monthStart = `${today.slice(0, 7)}-01`;
 
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    const yDate = y.toISOString().split('T')[0];
+        const [submittedToday, editedToday, submittedWeek, submittedMonth] = await Promise.all([
+          Tracker.countDocuments({ ...trackerFilter, date: today, isSubmitted: true }),
+          Tracker.countDocuments({ ...trackerFilter, date: today, isEdited: true }),
+          Tracker.countDocuments({ ...trackerFilter, date: { $gte: weekStart, $lte: today }, isSubmitted: true }),
+          Tracker.countDocuments({ ...trackerFilter, date: { $gte: monthStart, $lte: today }, isSubmitted: true }),
+        ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const yAtt = await Attendance.find({
-      employeeId: { $in: employees.map(e => e._id) },
-      date: yDate,
-    }).lean() as any[];
+        return { trackerTotal, submittedToday, editedToday, submittedWeek, submittedMonth };
+      })()
+    ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const yesterdayPresent = yAtt.filter((a: any) => (a.dayStatus || 'Absent') !== 'Absent').length;
+    const attMap = new Map((todayAtt as any[]).map((a: any) => [a.employeeId.toString(), a]));
+    const yesterdayPresent = (yAtt as any[]).filter((a: any) => (a.dayStatus || 'Absent') !== 'Absent').length;
 
     let presentCount = 0, absentCount = 0, lateCount = 0, earlyCount = 0, onTimeCount = 0, breakCount = 0, fieldCount = 0;
 
+    // Fetch office zones for mapping names
+    const empZoneIds = [...new Set(employees.filter(e => e.officeZoneId).map(e => e.officeZoneId.toString()))];
+    const officeZones = await mongoose.model('GpOfficeZone').find({ _id: { $in: empZoneIds } }, 'name').lean() as any[];
+    const zoneMap = new Map(officeZones.map(z => [z._id.toString(), z.name]));
+
     const teamPulse = employees.map(emp => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const att = attMap.get(emp._id.toString()) as any;
       let workMode = 'Absent', dayStatus = 'Absent', checkInTime = null;
       if (att) {
         workMode  = att.workMode || (att.isOnBreak ? 'Break' : att.isInField ? 'Field' : att.isCheckedIn ? 'Present' : 'Absent');
         dayStatus = att.dayStatus || 'Absent';
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const firstWork = att.sessions?.find((s: any) => s.type === 'work' || !s.type);
         if (firstWork) checkInTime = fmtTime(new Date(firstWork.checkIn));
       }
@@ -90,8 +120,7 @@ export async function GET() {
       return {
         employeeId:   emp._id.toString(),
         employeeName: emp.fullName,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        team: (emp.officeZoneId as any)?.name || 'No Zone',
+        team: zoneMap.get(emp.officeZoneId?.toString()) || 'No Zone',
         workMode, dayStatus, checkInTime,
       };
     }).sort((a, b) => {
@@ -99,44 +128,12 @@ export async function GET() {
       return (o[a.workMode] ?? 4) - (o[b.workMode] ?? 4);
     });
 
-    // Tasks - manager sees their team employees
-    const taskSummary = { blocked: 0, overdue: 0, total: 0, completed: 0 };
-    try {
-      const taskFilter =
-        user.role === 'manager'
-          ? { assignedTo: { $in: employees.map(e => e._id) } }
-          : {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tasks = await Task.find(taskFilter).lean() as any[];
-      taskSummary.total     = tasks.length;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      taskSummary.blocked   = tasks.filter((t: any) => t.status === 'blocked').length;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      taskSummary.overdue   = tasks.filter((t: any) => t.status !== 'completed' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      taskSummary.completed = tasks.filter((t: any) => t.status === 'completed').length;
-    } catch { /* ignore */ }
-
-    // Pending approvals - manager sees only their team's exceptions
-    let pendingApprovals = 0;
-    try {
-      if (user.role === 'manager') {
-        const teamEmployeeIds = employees.map(e => e._id);
-        pendingApprovals = await ExceptionRequest.countDocuments({
-          status: 'pending',
-          employeeId: { $in: teamEmployeeIds },
-        });
-      } else {
-        pendingApprovals = await ExceptionRequest.countDocuments({ status: 'pending' });
-      }
-    } catch { /* ignore */ }
-
+    const taskSummary = taskStats;
     const attendanceRate    = total > 0 ? Math.round((presentCount / total) * 100) : 0;
     const onTimeRate        = presentCount > 0 ? Math.round((onTimeCount / Math.max(presentCount, 1)) * 100) : 0;
     const taskCompletionRate = taskSummary.total > 0 ? Math.round((taskSummary.completed / taskSummary.total) * 100) : 0;
     const breakDiscipline   = Math.max(0, 100 - (breakCount * 5));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const needAction: any[] = [];
     if (taskSummary.blocked > 0)    needAction.push({ type: 'blocked_tasks', count: taskSummary.blocked, label: `${taskSummary.blocked} blocked task${taskSummary.blocked > 1 ? 's' : ''}` });
     if (lateCount > 0)               needAction.push({ type: 'late', count: lateCount, label: `${lateCount} employee${lateCount > 1 ? 's' : ''} late today` });
@@ -145,27 +142,16 @@ export async function GET() {
       needAction.push({ type: 'attendance_drop', count: yesterdayPresent - presentCount, label: `Attendance drop vs yesterday: -${yesterdayPresent - presentCount}` });
     }
 
-    // Tracker compliance (all roles)
-    const trackerUsers = await User.find({ role: { $in: ['admin', 'manager', 'employee'] }, isApproved: { $ne: false } })
-      .select('_id')
-      .lean();
-    const trackerIds = trackerUsers.map(u => u._id);
-    const trackerTotal = trackerIds.length;
-    const trackerSubmittedToday = await Tracker.countDocuments({ date: today, employeeId: { $in: trackerIds }, isSubmitted: true });
-    const trackerEditedToday = await Tracker.countDocuments({ date: today, employeeId: { $in: trackerIds }, isEdited: true });
-    const weekStart = getISTDateDaysAgo(6);
-    const monthStart = `${today.slice(0, 7)}-01`;
-    const trackerSubmittedWeek = await Tracker.countDocuments({ date: { $gte: weekStart, $lte: today }, employeeId: { $in: trackerIds }, isSubmitted: true });
-    const trackerSubmittedMonth = await Tracker.countDocuments({ date: { $gte: monthStart, $lte: today }, employeeId: { $in: trackerIds }, isSubmitted: true });
+    const { trackerTotal, submittedToday, editedToday, submittedWeek, submittedMonth } = trackerStats;
     const trackerExpectedWeek = trackerTotal * 7;
     const trackerExpectedMonth = trackerTotal * (new Date(today).getDate());
     const trackerCompliance = {
-      daily: trackerTotal > 0 ? Math.round((trackerSubmittedToday / trackerTotal) * 100) : 0,
-      weekly: trackerExpectedWeek > 0 ? Math.round((trackerSubmittedWeek / trackerExpectedWeek) * 100) : 0,
-      monthly: trackerExpectedMonth > 0 ? Math.round((trackerSubmittedMonth / trackerExpectedMonth) * 100) : 0,
-      submittedToday: trackerSubmittedToday,
-      missingToday: Math.max(0, trackerTotal - trackerSubmittedToday),
-      editedToday: trackerEditedToday,
+      daily: trackerTotal > 0 ? Math.round((submittedToday / trackerTotal) * 100) : 0,
+      weekly: trackerExpectedWeek > 0 ? Math.round((submittedWeek / trackerExpectedWeek) * 100) : 0,
+      monthly: trackerExpectedMonth > 0 ? Math.round((submittedMonth / trackerExpectedMonth) * 100) : 0,
+      submittedToday,
+      missingToday: Math.max(0, trackerTotal - submittedToday),
+      editedToday,
     };
 
     const healthScore = Math.round(

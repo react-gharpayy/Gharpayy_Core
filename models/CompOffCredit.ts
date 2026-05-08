@@ -16,8 +16,11 @@ const CompOffCreditSchema = new Schema<ICompOffCredit>({
   source:       { type: String, enum: ['holiday','week_off'], required: true },
   attendanceId: { type: Schema.Types.ObjectId, ref: 'GpAttendance', default: null },
   minutesWorked:{ type: Number, default: 0 },
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  collection: 'gpcompoffcredits'
+});
 
 CompOffCreditSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 
-export default mongoose.models.GpCompOffCredit || mongoose.model<ICompOffCredit>('GpCompOffCredit', CompOffCreditSchema);
+export default mongoose.models?.GpCompOffCredit || mongoose.model<ICompOffCredit>('GpCompOffCredit', CompOffCreditSchema);

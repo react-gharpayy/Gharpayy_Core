@@ -2,12 +2,14 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Clock, ClipboardList, ClipboardCheck, Bell, TrendingUp, History, LogOut, Settings, Menu, X, Calendar, Heart, LayoutDashboard, Target, Users } from 'lucide-react';
+import { NotificationBell } from '@/modules/notifications/components/NotificationBell';
 import WorkScheduleModal from '@/components/work-schedule-modal';
 import GiveKudoModal from '@/components/GiveKudoModal';
 import { getCurrentWeekInfo } from '@/lib/week-utils';
 
 const NAV_ITEMS = [
-  { label: 'My Attendance', href: '/home', icon: Clock },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'My Attendance', href: '/attendance', icon: Clock },
   { label: 'Arena Console', href: '/arena', icon: Target },
   { label: 'Daily Updates', href: '/tracker', icon: ClipboardList },
   { label: 'My Leaves', href: '/my-leaves', icon: Calendar },
@@ -51,13 +53,6 @@ export default function EmployeeSidebar() {
         if (d.id || d.email) setUser(d);
       })
       .catch(() => {});
-    
-    fetch('/api/kudos/employees')
-      .then(r => r.json())
-      .then(d => {
-        if (d.employees) setEmployees(d.employees);
-      })
-      .catch(() => {});
   }, []);
 
   const logout = async () => {
@@ -70,14 +65,17 @@ export default function EmployeeSidebar() {
     <>
       <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 bg-white border-r border-gray-200 overflow-hidden">
         <div className="px-5 py-5 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-orange-500">A</div>
-            <div>
-              <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
-              <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-orange-500">A</div>
+              <div>
+                <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
+                <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
+              </div>
             </div>
+            <NotificationBell />
           </div>
-          <div className="text-xs text-gray-700 mt-3">Gharpayy - ARENA OS</div>
+          <div className="text-xs text-gray-700">Gharpayy - ARENA OS</div>
         </div>
 
         <nav className="flex-1 px-3 py-4 overflow-y-auto no-scrollbar">
@@ -157,6 +155,7 @@ export default function EmployeeSidebar() {
             <div className="text-sm font-semibold text-gray-900">Gharpayy - ARENA OS</div>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <button
               onClick={logout}
               className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-orange-500 border border-gray-200 rounded-lg px-2.5 py-1.5 transition"

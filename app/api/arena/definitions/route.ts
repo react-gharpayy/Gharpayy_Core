@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { ArenaKPIDefinition, ArenaSprintPlan } from '@/models/ArenaState';
+import User from '@/models/User';
+import { NotificationService } from '@/modules/notifications/notification.service';
+import { slugify } from '@/lib/slugify';
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,8 +29,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-import { slugify } from '@/lib/slugify';
-
 export async function POST(req: NextRequest) {
   try {
     const authUser = await getAuthUser();
@@ -49,8 +50,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Target must be true/false for BOOLEAN type' }, { status: 400 });
       }
 
+      const isNew = !data._id;
+
       // Auto-generate kpiName if missing or new
-      if (!data._id && !data.kpiName) {
+      if (isNew && !data.kpiName) {
         let baseKey = slugify(data.label);
         let finalKey = baseKey;
         let counter = 1;
@@ -67,13 +70,46 @@ export async function POST(req: NextRequest) {
         { $set: data },
         { new: true, upsert: true }
       );
+
+      if (isNew) {
+        // Notify all employees with this playbookRole
+        const users = await User.find({ playbookRole: data.role, role: 'employee' }).select('_id');
+        for (const u of users) {
+          await NotificationService.createNotification({
+            userId: String(u._id),
+            type: 'KPI_ASSIGNED',
+            title: 'New KPI Assigned 🎯',
+            message: `A new KPI "${data.label}" has been assigned to your role.`,
+            link: '/arena',
+            metadata: { kpiId: kpi._id, role: data.role }
+          });
+        }
+      }
+
       return NextResponse.json({ ok: true, kpi });
     } else if (type === 'sprint') {
+      const isNew = !data._id;
       const sprint = await ArenaSprintPlan.findOneAndUpdate(
         { _id: data._id || new mongoose.Types.ObjectId() },
         { $set: data },
         { new: true, upsert: true }
       );
+
+      if (isNew) {
+        // Notify all employees with this playbookRole
+        const users = await User.find({ playbookRole: data.role, role: 'employee' }).select('_id');
+        for (const u of users) {
+          await NotificationService.createNotification({
+            userId: String(u._id),
+            type: 'SPRINT_ASSIGNED',
+            title: 'New Sprint Plan Updated ⚡',
+            message: `A new sprint "${data.sprintName}" has been added to your schedule.`,
+            link: '/arena',
+            metadata: { sprintId: sprint._id, role: data.role }
+          });
+        }
+      }
+
       return NextResponse.json({ ok: true, sprint });
     }
 

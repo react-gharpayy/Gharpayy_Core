@@ -54,9 +54,12 @@ const AttendanceSchema = new Schema<IAttendance>({
   isOnBreak:     { type: Boolean, default: false },
   isInField:     { type: Boolean, default: false },
   workMode:      { type: String, enum: ['Present', 'Break', 'Field', 'WFH', 'Absent'], default: 'Absent' },
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  collection: 'gpattendances'
+});
 
 AttendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 AttendanceSchema.index({ date: 1 });
 
-export default (mongoose.models.GpAttendance as mongoose.Model<IAttendance>) || mongoose.model<IAttendance>('GpAttendance', AttendanceSchema);
+export default mongoose.models?.GpAttendance || mongoose.model<IAttendance>('GpAttendance', AttendanceSchema);

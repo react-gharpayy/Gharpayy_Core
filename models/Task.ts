@@ -34,8 +34,11 @@ const TaskSchema = new Schema<ITask>({
   completionNote:  { type: String, default: '' },
   completionPhoto: { type: String, default: null },
   completedAt:     { type: Date, default: null },
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  collection: 'gptasks'
+});
 
 TaskSchema.index({ assignedTo: 1 });
 
-export default mongoose.models.GpTask || mongoose.model<ITask>('GpTask', TaskSchema);
+export default mongoose.models?.GpTask || mongoose.model<ITask>('GpTask', TaskSchema);

@@ -69,55 +69,54 @@ export async function GET(req: NextRequest) {
     await connectDB();
 
     const isManager = ['admin', 'manager', 'hr'].includes(user.role);
-    const todayStr  = getTodayIST();
-    const logDate   = date || todayStr;
+      const todayStr  = getTodayIST();
+      const logDate   = date || todayStr;
 
-    // Get week off day + shift rules from DB
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const zone = await OfficeZone.findOne({}).lean() as any;
-    const baseRules = await getShiftRules();
-    const weekOffDay   = zone?.weekOffDay || 'Tuesday';
-    const weekOffLabel = WEEK_OFF_LABEL[weekOffDay] || 'Tue';
+      // Get week off day + shift rules from DB
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const zone = await OfficeZone.findOne({}).lean() as any;
+      const baseRules = await getShiftRules();
+      const weekOffDay   = zone?.weekOffDay || 'Tuesday';
+      const weekOffLabel = WEEK_OFF_LABEL[weekOffDay] || 'Tue';
 
-    const shiftInfo = {
-      earlyBefore:  baseRules.shiftStart,
-      onTimeTill:   `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
-      lateAfter:    `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
-      shiftStart: baseRules.shiftStart,
-      shiftEnd: baseRules.shiftEnd,
-      graceMinutes: baseRules.graceMinutes,
-      weekOffDay,
-      weekOffLabel,
-    };
+      const shiftInfo = {
+        earlyBefore:  baseRules.shiftStart,
+        onTimeTill:   `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+        lateAfter:    `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+        shiftStart: baseRules.shiftStart,
+        shiftEnd: baseRules.shiftEnd,
+        graceMinutes: baseRules.graceMinutes,
+        weekOffDay,
+        weekOffLabel,
+      };
 
-    // Determine date range
-    let dates: string[] = [];
-    if (dateFrom && dateTo) {
-      const start = new Date(dateFrom);
-      const end = new Date(dateTo);
-      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start <= end) {
-        const d = new Date(start);
-        while (d <= end) {
-          dates.push(d.toISOString().split('T')[0]);
-          d.setDate(d.getDate() + 1);
+      // Determine date range
+      let dates: string[] = [];
+      if (dateFrom && dateTo) {
+        const start = new Date(dateFrom);
+        const end = new Date(dateTo);
+        if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start <= end) {
+          const d = new Date(start);
+          while (d <= end) {
+            dates.push(d.toISOString().split('T')[0]);
+            d.setDate(d.getDate() + 1);
+          }
         }
-      }
-    } else if (date)      dates = [date];
-    else if (week) dates = getWeekDatesFromStr(week);
+      } else if (date)      dates = [date];
+      else if (week) dates = getWeekDatesFromStr(week);
 
-    if (isManager) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const userQuery: any = {};
-      if (user.role !== 'manager') {
-        if (teamId) userQuery.officeZoneId = teamId;
-        if (managerId) userQuery.managerId = managerId;
-      }
+      if (isManager) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const userQuery: any = {};
+        if (user.role !== 'manager') {
+          if (teamId) userQuery.officeZoneId = teamId;
+          if (managerId) userQuery.managerId = managerId;
+        }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const users = await User.find(userQuery, 'fullName email role playbookRole officeZoneId isApproved workSchedule')
-        .select('-profilePhoto')
-        .populate('officeZoneId', 'name')
-        .lean() as any[];
+        const users = await User.find(userQuery, 'fullName email role playbookRole officeZoneId isApproved workSchedule')
+          .select('-profilePhoto')
+          .populate('officeZoneId', 'name')
+          .lean() as any[];
 
       const employeeIds = users.map(u => u._id.toString());
 

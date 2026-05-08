@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getCurrentWeekInfo } from '@/lib/week-utils';
 import GiveKudoModal from '@/components/GiveKudoModal';
+import { NotificationBell } from '@/modules/notifications/components/NotificationBell';
 
 const NAV_ITEMS = [
   { label: 'Workforce Overview', href: '/command-center', icon: LayoutDashboard },
@@ -74,13 +75,6 @@ export default function AdminSidebar() {
         if (d.pendingCount !== undefined) setApprovalCount(d.pendingCount);
       })
       .catch(() => {});
-
-    fetch('/api/kudos/employees')
-      .then(r => r.json())
-      .then(d => {
-        if (d.employees) setEmployees(d.employees);
-      })
-      .catch(() => {});
   }, []);
 
   const logout = async () => {
@@ -105,14 +99,17 @@ export default function AdminSidebar() {
     <>
       <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 bg-white border-r border-gray-200 overflow-hidden">
         <div className="px-5 py-5 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Gharpayy" className="w-12 h-12 rounded-xl object-cover" />
-            <div>
-              <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
-              <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Gharpayy" className="w-12 h-12 rounded-xl object-cover" />
+              <div>
+                <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
+                <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
+              </div>
             </div>
+            <NotificationBell />
           </div>
-          <div className="text-xs text-gray-700 mt-3">Gharpayy - ARENA OS</div>
+          <div className="text-xs text-gray-700">Gharpayy - ARENA OS</div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
@@ -193,6 +190,8 @@ export default function AdminSidebar() {
           </button>
           <img src="/logo.png" alt="Gharpayy" className="w-7 h-7 rounded-lg object-cover" />
           <div className="text-sm font-semibold text-gray-900">Gharpayy - ARENA OS</div>
+          <div className="flex-1" />
+          <NotificationBell />
         </div>
       </div>
 

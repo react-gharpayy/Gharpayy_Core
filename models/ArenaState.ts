@@ -128,13 +128,15 @@ const ArenaDailyStateSchema = new Schema({
 ArenaDailyStateSchema.index({ userId: 1, date: 1 }, { unique: true });
 ArenaKPIDefinitionSchema.index({ role: 1, kpiName: 1 }, { unique: true });
 
-// Clear cached models for HMR
-delete mongoose.models.ArenaKPIDefinition;
-delete mongoose.models.ArenaSprintPlan;
-delete mongoose.models.ArenaCommWindow;
-delete mongoose.models.ArenaDailyState;
+// Export models with defensive registration and explicit collection names
+export const ArenaKPIDefinition = mongoose.models?.ArenaKPIDefinition || 
+  mongoose.model<IArenaKPIDefinition>('ArenaKPIDefinition', ArenaKPIDefinitionSchema, 'arenakpidefinitions');
 
-export const ArenaKPIDefinition = mongoose.model<IArenaKPIDefinition>('ArenaKPIDefinition', ArenaKPIDefinitionSchema);
-export const ArenaSprintPlan = mongoose.model<IArenaSprintPlan>('ArenaSprintPlan', ArenaSprintPlanSchema);
-export const ArenaCommWindow = mongoose.model<IArenaCommWindow>('ArenaCommWindow', ArenaCommWindowSchema);
-export const ArenaDailyState = mongoose.model<IArenaDailyState>('ArenaDailyState', ArenaDailyStateSchema);
+export const ArenaSprintPlan = mongoose.models?.ArenaSprintPlan || 
+  mongoose.model<IArenaSprintPlan>('ArenaSprintPlan', ArenaSprintPlanSchema, 'arenasprintplans');
+
+export const ArenaCommWindow = mongoose.models?.ArenaCommWindow || 
+  mongoose.model<IArenaCommWindow>('ArenaCommWindow', ArenaCommWindowSchema, 'arenacommwindows');
+
+export const ArenaDailyState = mongoose.models?.ArenaDailyState || 
+  mongoose.model<IArenaDailyState>('ArenaDailyState', ArenaDailyStateSchema, 'arenadailystates');

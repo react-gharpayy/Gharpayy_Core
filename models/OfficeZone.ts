@@ -23,7 +23,9 @@ const OfficeZoneSchema = new Schema<IOfficeZone>({
   shiftEnd:     { type: String, default: '19:00' },
   graceMinutes: { type: Number, default: 15 },
   earlyGraceMinutes: { type: Number, default: 0 },
-  createdAt:    { type: Date, default: Date.now },
+}, { 
+  timestamps: true,
+  collection: 'gpofficezones'
 });
 
-export default mongoose.models.GpOfficeZone || mongoose.model<IOfficeZone>('GpOfficeZone', OfficeZoneSchema);
+export default mongoose.models?.GpOfficeZone || mongoose.model<IOfficeZone>('GpOfficeZone', OfficeZoneSchema);

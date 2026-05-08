@@ -18,9 +18,8 @@ export const DEFAULT_SHIFT_RULES: ShiftRules = {
   earlyGraceMinutes: 0,
 };
 
-export function getISTDateStr(date = new Date()) {
-  return new Date(date.getTime() + IST_OFFSET_MS).toISOString().split('T')[0];
-}
+import { getISTDateStr } from './date-utils';
+export { getISTDateStr };
 
 function parseHHMM(timeStr: string) {
   const [h, m] = (timeStr || '').split(':').map(Number);
@@ -93,7 +92,9 @@ function endOfISTDayAsUTC(dateStr: string) {
 }
 
 function sessionMins(checkIn: Date, checkOut: Date) {
-  return Math.max(0, Math.floor((checkOut.getTime() - checkIn.getTime()) / 60000));
+  const diff = checkOut.getTime() - checkIn.getTime();
+  if (Number.isNaN(diff)) return 0;
+  return Math.max(0, Math.floor(diff / 60000));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,10 +103,24 @@ export function recomputeAttendanceTotals(att: any) {
   const getMins = (s: any) => {
     const explicit = Number.isFinite(Number(s?.minutes)) ? Number(s.minutes) : null;
     const legacy = Number.isFinite(Number(s?.workMinutes)) ? Number(s.workMinutes) : 0;
-    if (explicit !== null && explicit > 0) return explicit;
-    if (explicit === 0 && legacy > 0) return legacy; // legacy records where minutes defaulted to 0
+    if (explicit !== null && (explicit > 0 || (explicit === 0 && legacy === 0))) return explicit;
+    if (explicit === 0 && legacy > 0) return legacy;
     return explicit ?? legacy ?? 0;
   };
+
+  // Sanitize sessions to prevent NaN validation errors
+  if (Array.isArray(att.sessions)) {
+    att.sessions.forEach((s: any) => {
+      const m = getMins(s);
+      s.minutes = m;
+      if ((s.type || 'work') !== 'break') {
+        s.workMinutes = m;
+      } else {
+        s.workMinutes = 0;
+      }
+    });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   att.totalWorkMins = (att.sessions || []).reduce((sum: number, s: any) => {
     const mins = getMins(s);
@@ -138,11 +153,20 @@ export async function autoCloseMissedClockOut(employeeId?: string) {
       let changed = false;
 
       if (last && !last.checkOut) {
-        last.checkOut = closeAt;
-        const mins = sessionMins(new Date(last.checkIn), closeAt);
-        last.minutes = mins;
-        if (last.type !== 'break') last.workMinutes = mins;
-        changed = true;
+        const checkInTime = last.checkIn ? new Date(last.checkIn).getTime() : NaN;
+        if (!Number.isNaN(checkInTime)) {
+          last.checkOut = closeAt;
+          const mins = sessionMins(new Date(checkInTime), closeAt);
+          last.minutes = mins;
+          if (last.type !== 'break') last.workMinutes = mins;
+          changed = true;
+        } else {
+          // Fallback for invalid check-in time
+          last.checkOut = closeAt;
+          last.minutes = 0;
+          if (last.type !== 'break') last.workMinutes = 0;
+          changed = true;
+        }
       }
 
       att.isCheckedIn = false;

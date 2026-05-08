@@ -6,6 +6,7 @@ import Leave from '@/models/Leave';
 import LeaveBalance from '@/models/LeaveBalance';
 import User from '@/models/User';
 import { ensureLeaveBalance } from '@/lib/leave-utils';
+import { NotificationService } from '@/modules/notifications/notification.service';
 
 export async function POST(_: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -42,6 +43,16 @@ export async function POST(_: NextRequest, ctx: { params: Promise<{ id: string }
     leave.reviewedBy = auth.id;
     leave.reviewedByName = auth.fullName || auth.email;
     await leave.save();
+
+    // Notify employee
+    await NotificationService.createNotification({
+      userId: String(leave.employeeId),
+      type: 'LEAVE_STATUS',
+      title: 'Leave Approved',
+      message: `Your leave request for ${leave.startDate}${leave.endDate !== leave.startDate ? ` to ${leave.endDate}` : ''} has been approved.`,
+      link: '/my-leaves',
+      metadata: { leaveId: leave._id }
+    });
 
     if (leave.reason === 'Off tomorrow') {
       const emp = await User.findById(leave.employeeId).select('leaves');

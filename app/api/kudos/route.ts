@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { kudosStore } from '@/lib/kudos-store';
+import { NotificationService } from '@/modules/notifications/notification.service';
 
 export async function GET() {
   try {
@@ -43,6 +44,17 @@ export async function POST(req: NextRequest) {
         tag,
         message
       );
+
+      // Notify recipient
+      await NotificationService.createNotification({
+        userId: toId,
+        type: 'KUDOS_RECEIVED',
+        title: 'New Kudo Received! 🌟',
+        message: `${user.fullName || user.email} gave you a kudo for being "${tag}"!`,
+        link: '/kudos',
+        metadata: { kudoId: newKudo.id, fromName: user.fullName || user.email }
+      });
+
       return NextResponse.json({ ok: true, kudo: newKudo });
     } catch (err: any) {
       if (err.message === 'Daily limit reached') {
