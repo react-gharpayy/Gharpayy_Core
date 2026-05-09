@@ -1,7 +1,7 @@
 'use client';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Clock, ClipboardList, ClipboardCheck, Bell, TrendingUp, History, LogOut, Settings, Menu, X, Calendar, Heart, LayoutDashboard, Target, Users } from 'lucide-react';
+import { Clock, ClipboardList, ClipboardCheck, Bell, TrendingUp, History, LogOut, Settings, Menu, X, Calendar, Heart, LayoutDashboard, Target, Users, Lightbulb } from 'lucide-react';
 import { NotificationBell } from '@/modules/notifications/components/NotificationBell';
 import WorkScheduleModal from '@/components/work-schedule-modal';
 import GiveKudoModal from '@/components/GiveKudoModal';
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { label: 'My Tasks', href: '/my-tasks', icon: ClipboardList },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },
   { label: 'Performance Analytics', href: '/my-performance', icon: TrendingUp },
+  { label: '1:1 Sessions', href: '/coaching', icon: Lightbulb },
   { label: 'Kudos', href: '/kudos', icon: Heart },
   { label: 'My History', href: '/my-history', icon: History },
   { label: 'Settings', href: '/settings', icon: Settings },

@@ -53,15 +53,32 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     fetchNotifications();
     
-    // Polling strategy - 60s is enough for background updates
-    const interval = setInterval(fetchNotifications, 60000); 
+    const eventSource = new EventSource('/api/notifications/stream');
     
-    // Refetch on focus - with a throttle check would be better, but standard is fine
+    eventSource.onmessage = (event) => {
+      try {
+        const notification = JSON.parse(event.data);
+        setNotifications(prev => {
+          if (prev.find(n => n._id === notification._id)) return prev;
+          return [notification, ...prev].slice(0, 50);
+        });
+        setUnreadCount(prev => prev + 1);
+      } catch (err) {
+        // Heartbeat or malformed data
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('SSE Connection Error:', err);
+      eventSource.close();
+      setTimeout(() => fetchNotifications(), 5000);
+    };
+
     const handleFocus = () => fetchNotifications();
     window.addEventListener('focus', handleFocus);
     
     return () => {
-      clearInterval(interval);
+      eventSource.close();
       window.removeEventListener('focus', handleFocus);
     };
   }, [fetchNotifications]);

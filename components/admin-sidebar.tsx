@@ -3,7 +3,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, BarChart2, ClipboardList, ClipboardCheck,
-  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound, Calendar, Heart, Target
+  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound, Calendar, Heart, Target, Lightbulb
 } from 'lucide-react';
 import { getCurrentWeekInfo } from '@/lib/week-utils';
 import GiveKudoModal from '@/components/GiveKudoModal';
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { label: 'Performance Analytics', href: '/kpis', icon: BarChart2 },
   { label: 'Team Hierarchy', href: '/team-hierarchy', icon: GitBranch },
   { label: 'Approval Center', href: '/approvals', icon: CheckSquare },
+  { label: '1:1 Sessions', href: '/coaching', icon: Lightbulb },
   { label: 'Reports', href: '/reports', icon: FileText },
   { label: 'Employee Management', href: '/admin', icon: Users },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
@@ -40,6 +41,7 @@ const MANAGER_ALLOWED = new Set([
   '/kpis',
   '/kudos',
   '/arena-admin',
+  '/coaching',
 ]);
 
 function initials(name: string) {

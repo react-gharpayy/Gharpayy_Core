@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Clock } from 'lucide-react';
@@ -71,6 +71,19 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
   const [historyStatus, setHistoryStatus] = useState('');
   const [historyStart, setHistoryStart] = useState('');
   const [historyEnd, setHistoryEnd] = useState('');
+  const [coachingSessions, setCoachingSessions] = useState<any[]>([]);
+
+  const fetchCoaching = async (empId: string) => {
+    try {
+      const res = await fetch(`/api/coaching?search=${empId}&tab=all&limit=5`);
+      const data = await res.json();
+      if (data.ok && data.sessions) {
+         setCoachingSessions(data.sessions.filter((s:any) => s.employeeId === empId));
+      }
+    } catch {
+      setCoachingSessions([]);
+    }
+  };
 
   const fetchStatus = (empId?: string) => {
     const url = userRole === 'admin' || userRole === 'manager'
@@ -145,6 +158,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
           if (first) {
             fetchDetail(first);
             fetchHistory(first, 1);
+            fetchCoaching(first);
           }
         } else {
           const selfId = me.id || '';
@@ -154,6 +168,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
           if (selfId && selfId !== 'admin') {
             fetchDetail(selfId);
             fetchHistory(selfId, 1);
+            fetchCoaching(selfId);
           }
         }
       })
@@ -172,6 +187,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
         fetchStatus(effectiveEmployeeId);
         fetchDetail(effectiveEmployeeId);
         fetchHistory(effectiveEmployeeId, 1);
+        fetchCoaching(effectiveEmployeeId);
       }
     }
   }, [effectiveEmployeeId, userRole]);
@@ -337,6 +353,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
               if (next) {
                 fetchDetail(next);
                 fetchHistory(next, 1);
+                fetchCoaching(next);
               }
             }}
             className="px-3 py-2 rounded-xl text-sm focus:outline-none"
@@ -690,6 +707,51 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
       <div className="bg-white rounded-3xl border border-gray-200 p-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Performance & KPI</h3>
         <div className="text-xs text-gray-500">No performance records available in the system yet.</div>
+      </div>
+
+      {/* 1:1 Sessions & Timeline */}
+      <div className="bg-white rounded-3xl border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">1:1 History</h3>
+        {coachingSessions.length === 0 ? (
+          <div className="text-xs text-gray-500">No 1:1 sessions recorded.</div>
+        ) : (
+          <div className="space-y-4 border-l-2 border-gray-100 pl-4 ml-2">
+            {coachingSessions.map((session: any) => (
+               <div key={session._id} className="relative">
+                 <div className="absolute -left-[23px] top-1 w-3 h-3 bg-white border-2 border-orange-500 rounded-full"></div>
+                 <div className="bg-gray-50 border border-gray-100 p-4 rounded-2xl">
+                    <div className="flex justify-between items-start mb-2">
+                       <div>
+                         <div className="font-semibold text-gray-900 text-sm">Session with {session.conductedByName}</div>
+                         <div className="text-xs text-gray-500">{new Date(session.scheduledAt).toLocaleDateString('en-IN', { dateStyle: 'medium'})}</div>
+                       </div>
+                       <div className="text-[10px] font-bold px-2 py-1 rounded bg-orange-100 text-orange-600 uppercase tracking-wide">
+                          {session.healthStatus.replace('-', ' ')}
+                       </div>
+                    </div>
+                    {session.sharedNotes && (
+                      <div className="text-xs text-gray-600 mt-2 p-2 bg-white rounded-xl border border-gray-100">
+                        {session.sharedNotes}
+                      </div>
+                    )}
+                    {session.actionItems?.length > 0 && (
+                      <div className="mt-3">
+                         <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Action Items</div>
+                         <div className="space-y-1">
+                           {session.actionItems.map((a: any) => (
+                              <div key={a._id} className={`text-xs flex items-center gap-1.5 ${a.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                                 <div className={`w-1.5 h-1.5 rounded-full ${a.status === 'completed' ? 'bg-emerald-500' : 'bg-orange-500'}`}></div>
+                                 {a.title}
+                              </div>
+                           ))}
+                         </div>
+                      </div>
+                    )}
+                 </div>
+               </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

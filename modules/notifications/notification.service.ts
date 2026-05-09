@@ -12,6 +12,8 @@ export interface CreateNotificationParams {
   metadata?: Record<string, any>;
 }
 
+import { notificationEmitter } from './emitter';
+
 export class NotificationService {
   static async createNotification(params: CreateNotificationParams) {
     if (!mongoose.Types.ObjectId.isValid(params.userId)) return null;
@@ -21,6 +23,10 @@ export class NotificationService {
         ...params,
         isRead: false
       });
+      
+      // Emit realtime event
+      notificationEmitter.emitNotification(params.userId, notification);
+      
       return notification;
     } catch (error) {
       console.error('Error creating notification:', error);

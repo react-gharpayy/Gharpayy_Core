@@ -22,86 +22,78 @@ export function NotificationBell() {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
-    return (
-      <button className="relative p-2 rounded-full hover:bg-gray-100 transition-colors group">
-        <Bell className="h-5 w-5 text-gray-400 group-hover:text-orange-500 transition-colors" />
-      </button>
-    );
-  }
-
-  const displayNotifications = notifications.slice(0, 10);
+  if (!mounted) return (
+    <button className="relative p-2 text-gray-500 hover:text-gray-900 transition-colors">
+      <Bell className="h-5 w-5" />
+    </button>
+  );
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="relative p-2 rounded-full hover:bg-gray-100 transition-colors group">
-          <Bell className="h-5 w-5 text-gray-600 group-hover:text-orange-500 transition-colors" />
+        <button className="relative p-2 text-gray-500 hover:text-gray-900 transition-colors group">
+          <Bell className={`h-5 w-5 transition-transform ${unreadCount > 0 ? 'group-hover:scale-110' : ''}`} />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
+            <Badge 
+              variant="destructive" 
+              className="absolute -top-0.5 -right-0.5 h-4 w-4 flex items-center justify-center p-0 text-[10px] font-bold border-2 border-white animate-in zoom-in duration-300"
+            >
               {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
+            </Badge>
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-0 shadow-xl border-gray-100 overflow-hidden">
-        <div className="p-4 bg-gray-50/50 flex justify-between items-center border-b border-gray-100">
-          <div>
-            <DropdownMenuLabel className="p-0 font-black text-gray-900">Notifications</DropdownMenuLabel>
-            <p className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-              {unreadCount} Unread
-            </p>
+      <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden rounded-2xl border-gray-100 shadow-2xl">
+        <DropdownMenuLabel className="p-4 bg-white flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-black text-gray-900">Notifications</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{unreadCount} Unread</span>
           </div>
           {unreadCount > 0 && (
             <button 
-              onClick={(e) => {
-                e.preventDefault();
-                markAllAsRead();
-              }}
-              className="text-[10px] font-black text-orange-500 hover:text-orange-600 uppercase tracking-widest transition-colors flex items-center gap-1"
+              onClick={(e) => { e.preventDefault(); markAllAsRead(); }}
+              className="text-[9px] font-black text-orange-500 hover:text-orange-600 flex items-center gap-1 uppercase tracking-widest transition-all"
             >
-              <Check className="h-3 w-3" /> Mark all read
+              <Check className="h-3 w-3" /> Mark All Read
             </button>
           )}
-        </div>
-
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="m-0 bg-gray-50" />
         <div className="max-h-[400px] overflow-y-auto">
-          {loading && notifications.length === 0 ? (
-            <div className="p-8 text-center text-xs font-bold text-gray-400 animate-pulse">
-              SYNCING NOTIFICATIONS...
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="w-8 h-8 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mx-auto mb-3"></div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Syncing Pulse...</p>
             </div>
-          ) : notifications.length === 0 ? (
-            <div className="p-12 text-center space-y-3">
-              <div className="h-12 w-12 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto border border-gray-100">
-                <Info className="h-6 w-6 text-gray-300" />
+          ) : notifications.filter(n => !n.isRead).length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+                <Bell className="h-6 w-6 text-gray-300" />
               </div>
-              <p className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest">No notifications yet</p>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest">No unread notifications</p>
             </div>
           ) : (
-            displayNotifications.map((n) => (
+            notifications.filter(n => !n.isRead).map((notification) => (
               <DropdownMenuItem 
-                key={n._id}
-                className={`p-4 cursor-pointer focus:bg-gray-50 flex flex-col items-start gap-1 border-b border-gray-50 last:border-0 transition-colors ${!n.isRead ? 'bg-orange-50/30' : ''}`}
-                onSelect={(e) => {
-                  e.preventDefault();
-                  if (!n.isRead) markAsRead(n._id);
+                key={notification._id} 
+                className={`flex flex-col items-start p-4 cursor-pointer border-b border-gray-50 last:border-0 transition-colors focus:bg-gray-50 bg-orange-50/30`}
+                onSelect={() => {
+                  markAsRead(notification._id);
                 }}
               >
-                <div className="flex justify-between items-start w-full gap-2">
-                  <span className={`text-[11px] font-black leading-tight ${!n.isRead ? 'text-gray-900' : 'text-gray-600'}`}>
-                    {n.title}
-                  </span>
-                  <span className="text-[9px] font-mono font-bold text-gray-400 uppercase whitespace-nowrap">
-                    {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                <div className="flex w-full justify-between items-start mb-1">
+                  <span className="text-[11px] font-black text-gray-900 line-clamp-1 pr-4">{notification.title}</span>
+                  <span className="text-[9px] font-bold text-gray-400 uppercase whitespace-nowrap">
+                    {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                   </span>
                 </div>
-                <p className="text-[11px] text-gray-500 font-medium leading-relaxed line-clamp-2">
-                  {n.message}
+                <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2 mb-2 font-medium">
+                  {notification.message}
                 </p>
-                {n.link && (
+                {notification.link && (
                   <Link 
-                    href={n.link}
-                    className="mt-2 flex items-center gap-1 text-[9px] font-black text-orange-500 uppercase tracking-widest hover:underline"
+                    href={notification.link}
+                    className="flex items-center gap-1.5 text-[9px] font-black text-orange-500 hover:text-orange-600 uppercase tracking-widest transition-all"
                   >
                     View Details <ExternalLink className="h-2.5 w-2.5" />
                   </Link>

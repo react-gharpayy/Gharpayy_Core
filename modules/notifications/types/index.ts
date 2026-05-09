@@ -1,4 +1,4 @@
-export type NotificationType = 'LEAVE_STATUS' | 'KUDOS_RECEIVED' | 'KPI_ASSIGNED' | 'SPRINT_ASSIGNED' | 'ATTENDANCE_ALERT' | 'SYSTEM';
+export type NotificationType = 'LEAVE_STATUS' | 'KUDOS_RECEIVED' | 'KPI_ASSIGNED' | 'SPRINT_ASSIGNED' | 'ATTENDANCE_ALERT' | 'SYSTEM' | 'COACHING_SESSION';
 
 export interface INotification {
   _id: string;
