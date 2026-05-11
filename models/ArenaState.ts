@@ -2,8 +2,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 // 1. KPI Definition - Admin defined
 export interface IArenaKPIDefinition extends Document {
-  role: string;
-  kpiName: string; // internal key
+  role: string;       // playbookRole slug — drives KPI assignment to employees
+  teamSlug?: string;  // optional: also scope to a specific team (for team-level KPIs)
+  kpiName: string;
   label: string;
   type: 'NUMBER' | 'BOOLEAN';
   target: any;
@@ -12,29 +13,32 @@ export interface IArenaKPIDefinition extends Document {
 }
 
 const ArenaKPIDefinitionSchema = new Schema({
-  role: { type: String, required: true },
-  kpiName: { type: String, required: true },
-  label: { type: String, required: true },
-  type: { type: String, enum: ['NUMBER', 'BOOLEAN'], default: 'NUMBER' },
-  target: { type: Schema.Types.Mixed, default: 0 },
+  role:      { type: String, required: true },
+  teamSlug:  { type: String, default: null },  // null = applies to all teams with this role
+  kpiName:   { type: String, required: true },
+  label:     { type: String, required: true },
+  type:      { type: String, enum: ['NUMBER', 'BOOLEAN'], default: 'NUMBER' },
+  target:    { type: Schema.Types.Mixed, default: 0 },
   orderIndex: { type: Number, default: 0 },
-  isActive: { type: Boolean, default: true },
+  isActive:  { type: Boolean, default: true },
 });
 
 // 2. Sprint Plan - Admin defined
 export interface IArenaSprintPlan extends Document {
-  role: string;
+  role: string;       // playbookRole slug
+  teamSlug?: string;  // optional team scope
   sprintName: string;
-  startTime: string; // e.g. "10:00"
-  endTime: string;   // e.g. "11:00"
+  startTime: string;
+  endTime: string;
   orderIndex: number;
 }
 
 const ArenaSprintPlanSchema = new Schema({
-  role: { type: String, required: true },
+  role:       { type: String, required: true },
+  teamSlug:   { type: String, default: null },
   sprintName: { type: String, required: true },
-  startTime: { type: String, required: true },
-  endTime: { type: String, required: true },
+  startTime:  { type: String, required: true },
+  endTime:    { type: String, required: true },
   orderIndex: { type: Number, default: 0 },
 });
 

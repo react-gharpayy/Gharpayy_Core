@@ -101,6 +101,10 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
     }
 
+    if (!isAdminActor) {
+      return NextResponse.json({ error: 'Only admins can modify work schedules' }, { status: 403 });
+    }
+
     await connectDB();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const breakDuration = finalBreaks.reduce((sum, b) => sum + Number(b.durationMinutes || 0), 0);
@@ -112,8 +116,7 @@ export async function PATCH(req: NextRequest) {
       breaks: finalBreaks,
       weekOffs: finalWeekOffs,
       isCustomShift: isCustom,
-      isLocked: true,
-      setBy: isAdminActor ? 'admin' : 'employee',
+      setBy: 'admin',
     } as any;
 
     if (isBulk) {
@@ -123,11 +126,6 @@ export async function PATCH(req: NextRequest) {
 
     const user = await User.findById(targetId);
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-
-    const existing = user.workSchedule || {};
-    if (!isAdminActor && (existing as Record<string, unknown>).isLocked) {
-      return NextResponse.json({ error: 'Work schedule is locked. Contact admin.' }, { status: 403 });
-    }
 
     user.workSchedule = payload;
     await user.save();

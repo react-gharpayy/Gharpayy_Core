@@ -550,7 +550,7 @@ export default function LiveAttendance() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-gray-900">{emp.totalBreakMins || 0}m</div>
-                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work {emp.totalWorkMins || 0}m</div>
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work Hours {emp.totalWorkMins || 0}m</div>
                     </div>
                   </div>
                 ))}
@@ -571,7 +571,7 @@ export default function LiveAttendance() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-gray-900">{emp.totalBreakMins || 0}m</div>
-                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work {emp.totalWorkMins || 0}m</div>
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work Hours {emp.totalWorkMins || 0}m</div>
                     </div>
                   </div>
                 ))}

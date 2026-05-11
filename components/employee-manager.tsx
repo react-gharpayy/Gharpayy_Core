@@ -144,8 +144,16 @@ export default function EmployeeManager() {
   const fetchEmployees = () => {
     fetch('/api/employees?page=1&limit=100', { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { if (d.users) { setEmployees(d.users); setSelectedIds([]); } })
-      .catch(() => {})
+      .then(d => {
+        if (d.users) {
+          setEmployees(d.users);
+          setSelectedIds([]);
+        } else if (d.error) {
+          // Surface API errors so they're visible instead of silently showing 0
+          flash(d.error, false);
+        }
+      })
+      .catch(() => flash('Failed to load employees', false))
       .finally(() => setLoading(false));
   };
 

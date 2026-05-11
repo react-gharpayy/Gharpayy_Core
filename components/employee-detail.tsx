@@ -464,7 +464,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-orange-100">
                   <div className="text-lg font-bold text-teal-600">{att.totalWorkFormatted}</div>
-                  <div className="text-xs text-gray-700">Worked</div>
+                  <div className="text-xs text-gray-700">Work Hours</div>
                 </div>
                 <div className="bg-white rounded-xl p-3 border border-orange-100">
                   <div className={`text-sm font-bold ${att.dayStatus === 'Late' ? 'text-orange-500' : 'text-teal-600'}`}>{att.dayStatus}</div>
@@ -534,7 +534,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
               <div className="text-lg font-bold text-teal-600">{analytics.onTimeRate || 0}%</div>
             </div>
             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-              <div className="text-xs text-gray-700">Avg Work</div>
+              <div className="text-xs text-gray-700">Avg Work Hours</div>
               <div className="text-lg font-bold text-gray-800">{Math.floor((analytics.avgWorkMins || 0)/60)}h {(analytics.avgWorkMins || 0)%60}m</div>
             </div>
           </div>

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Users, Target, Zap, Plus, Edit2, Trash2, 
-  ChevronRight, Activity, Search, ShieldCheck, BarChart3, Settings2, Palette, Shield 
+  ChevronRight, Activity, Search, ShieldCheck, BarChart3, Settings2, Palette, Shield, GitBranch
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,26 +14,28 @@ export default function ArenaAdmin() {
   const [definitions, setDefinitions] = useState<any[]>([]);
   const [sprints, setSprints] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+  const [teamGroups, setTeamGroups] = useState<{ teamName: string; members: any[] }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmp, setSelectedEmp] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [playbookRoles, setPlaybookRoles] = useState<any[]>([]);
   const [newRole, setNewRole] = useState({ name: '', slug: '', color: '#f97316', isActive: true });
-  const [roleFilter, setRoleFilter] = useState('all');
+  // teamFilter replaces roleFilter — monitoring now groups by team, not playbook role
+  const [teamFilter, setTeamFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingRole, setEditingRole] = useState<any>(null);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d));
-    const savedFilter = localStorage.getItem('arena_role_filter');
+    const savedFilter = localStorage.getItem('arena_team_filter');
     const savedSearch = localStorage.getItem('arena_search_term');
-    if (savedFilter) setRoleFilter(savedFilter);
+    if (savedFilter) setTeamFilter(savedFilter);
     if (savedSearch) setSearchTerm(savedSearch);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('arena_role_filter', roleFilter);
-  }, [roleFilter]);
+    localStorage.setItem('arena_team_filter', teamFilter);
+  }, [teamFilter]);
 
   useEffect(() => {
     localStorage.setItem('arena_search_term', searchTerm);
@@ -78,13 +80,19 @@ export default function ArenaAdmin() {
     if (res.ok) setEmployees(res.employees);
   };
 
+  // Fetch employees grouped by team (operational grouping)
+  const fetchTeamGroups = async () => {
+    const res = await fetch('/api/arena/team-view').then(r => r.json());
+    if (res.ok) setTeamGroups(res.groups || []);
+  };
+
   const fetchRoles = async () => {
     const res = await fetch('/api/arena/roles').then(r => r.json());
     if (res.ok) setPlaybookRoles(res.roles);
   };
 
   useEffect(() => {
-    Promise.all([fetchDefs(), fetchEmployees(), fetchRoles()]).finally(() => setLoading(false));
+    Promise.all([fetchDefs(), fetchEmployees(), fetchTeamGroups(), fetchRoles()]).finally(() => setLoading(false));
   }, []);
 
   const handleSaveRole = async () => {
@@ -115,7 +123,7 @@ export default function ArenaAdmin() {
     }).then(r => r.json());
     if (res.ok) {
       fetchEmployees();
-      alert("Role assigned successfully");
+      fetchTeamGroups();
     }
   };
 
@@ -127,6 +135,7 @@ export default function ArenaAdmin() {
     }).then(r => r.json());
     if (res.ok) {
       fetchEmployees();
+      fetchTeamGroups();
     }
   };
 
@@ -202,7 +211,7 @@ export default function ArenaAdmin() {
                 <Zap className="h-4 w-4 mr-2" /> SPRINT PLANS
               </TabsTrigger>
               <TabsTrigger value="roles" className="rounded-xl px-6 font-bold text-xs h-full data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                <Shield className="h-4 w-4 mr-2" /> PLAYBOOK ROLES
+                <Shield className="h-4 w-4 mr-2" /> KPI FUNCTION GROUPS
               </TabsTrigger>
             </>
           )}
@@ -210,35 +219,32 @@ export default function ArenaAdmin() {
 
         <TabsContent value="monitoring" className="mt-8 space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+               {/* Team filter tabs — operational grouping by teamName, NOT hierarchy role */}
                <div className="flex flex-wrap gap-2">
                   <button 
-                    onClick={() => setRoleFilter('all')}
+                    onClick={() => setTeamFilter('all')}
                     className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                      roleFilter === 'all' 
+                      teamFilter === 'all' 
                       ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-900/10' 
                       : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200'
                     }`}
                   >
-                    All Operators ({employees.length})
+                    All Teams ({employees.length})
                   </button>
-                  {playbookRoles.map(role => {
-                    const count = employees.filter(e => (e.playbookRole || 'recruiter') === role.slug).length;
-                    return (
-                      <button 
-                        key={role._id}
-                        onClick={() => setRoleFilter(role.slug)}
-                        className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
-                          roleFilter === role.slug 
-                          ? 'bg-white shadow-lg' 
-                          : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200'
-                        }`}
-                        style={roleFilter === role.slug ? { borderColor: role.color, color: role.color } : {}}
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: role.color }} />
-                        {role.name} ({count})
-                      </button>
-                    );
-                  })}
+                  {teamGroups.map(group => (
+                    <button 
+                      key={group.teamName}
+                      onClick={() => setTeamFilter(group.teamName)}
+                      className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
+                        teamFilter === group.teamName 
+                        ? 'bg-white shadow-lg border-indigo-400 text-indigo-600' 
+                        : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200'
+                      }`}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      {group.teamName} ({group.members.length})
+                    </button>
+                  ))}
                </div>
 
                <div className="relative w-full md:w-64 group">
@@ -253,18 +259,20 @@ export default function ArenaAdmin() {
                </div>
             </div>
 
+           {/* Employee cards grouped by team */}
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {employees
-                .filter(emp => {
-                  const matchesRole = roleFilter === 'all' || (emp.playbookRole || 'recruiter') === roleFilter;
-                  const matchesSearch = !searchTerm || emp.fullName.toLowerCase().includes(searchTerm.toLowerCase());
-                  return matchesRole && matchesSearch;
-                })
+              {(teamFilter === 'all'
+                ? teamGroups.flatMap(g => g.members)
+                : (teamGroups.find(g => g.teamName === teamFilter)?.members ?? [])
+              )
+                .filter(emp => !searchTerm || emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()))
                 .map(emp => {
-                  const roleData = playbookRoles.find(r => r.slug === (emp.playbookRole || 'recruiter'));
+                  // playbookRole is the KPI function — shown as a secondary badge, NOT the primary label
+                  const kpiRole = playbookRoles.find(r => r.slug === emp.playbookRole);
                   return (
                     <div key={emp._id} style={cardStyle} className="p-6 hover:border-orange-500/30 transition-all group relative overflow-hidden">
-                       <div className="absolute top-0 left-0 h-1 w-full transition-colors" style={{ backgroundColor: roleData?.color || '#f97316' }} />
+                       {/* Team color bar at top */}
+                       <div className="absolute top-0 left-0 h-1 w-full bg-indigo-500" />
                        <div className="flex justify-between items-start mb-6">
                           <div className="flex gap-4 items-center">
                              <div className="h-12 w-12 rounded-2xl bg-gray-50 flex items-center justify-center border border-gray-100">
@@ -272,12 +280,33 @@ export default function ArenaAdmin() {
                              </div>
                              <div>
                                 <div className="font-black text-gray-900">{emp.fullName}</div>
-                                <div className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: roleData?.color || '#9ca3af' }}>
-                                  {roleData?.name || emp.playbookRole || 'Recruiter'}
+                                {/* PRIMARY label: Team name (operational grouping) */}
+                                <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-indigo-500">
+                                  {emp.teamName || 'Unassigned Team'}
+                                </div>
+                                {/* SECONDARY badges: hierarchy role + KPI function */}
+                                <div className="flex gap-1.5 mt-1 flex-wrap">
+                                  {emp.hierarchyRole && (
+                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md"
+                                      style={{ background: `${emp.hierarchyRole.color}20`, color: emp.hierarchyRole.color }}>
+                                      {emp.hierarchyRole.name}
+                                    </span>
+                                  )}
+                                  {emp.jobTitle && (
+                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500">
+                                      {emp.jobTitle}
+                                    </span>
+                                  )}
+                                  {kpiRole && (
+                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md"
+                                      style={{ background: `${kpiRole.color}15`, color: kpiRole.color }}>
+                                      KPI: {kpiRole.name}
+                                    </span>
+                                  )}
                                 </div>
                              </div>
                           </div>
-                          <Badge className="bg-green-500/10 text-green-600 border-none text-[9px] font-black">STABLE</Badge>
+                          <Badge className="bg-green-500/10 text-green-600 border-none text-[9px] font-black">ACTIVE</Badge>
                        </div>
 
                        <div className="mt-4">
@@ -298,7 +327,9 @@ export default function ArenaAdmin() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                <div>
                   <h3 className="text-lg font-black text-gray-900">Workforce Management</h3>
-                  <p className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest">Assign roles and manage operational status</p>
+                  <p className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest">
+                    Assign KPI function groups · Team assignment via Hierarchy Manager
+                  </p>
                </div>
                <div className="relative w-full md:w-64 group">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
@@ -330,7 +361,22 @@ export default function ArenaAdmin() {
                                 </Badge>
                              </div>
                              <div className="text-[10px] font-bold text-gray-400">{emp.email}</div>
-                             <div className="flex gap-4 items-center mt-2">
+                             <div className="flex gap-3 items-center mt-1.5 flex-wrap">
+                               {/* Team assignment — set via Hierarchy Manager, shown read-only here */}
+                               {emp.teamName ? (
+                                 <span className="text-[9px] font-bold px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-600">
+                                   Team: {emp.teamName}
+                                 </span>
+                               ) : (
+                                 <span className="text-[9px] font-bold px-2 py-0.5 rounded-lg bg-gray-100 text-gray-400">
+                                   No team assigned
+                                 </span>
+                               )}
+                               {emp.department && (
+                                 <span className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-tighter">
+                                   {emp.department}
+                                 </span>
+                               )}
                                <button 
                                  onClick={() => handleToggleStatus(emp._id, emp.isApproved)}
                                  className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-all ${
@@ -341,24 +387,23 @@ export default function ArenaAdmin() {
                                >
                                  {emp.isApproved ? 'DEACTIVATE' : 'ACTIVATE'}
                                </button>
-                               {emp.department && (
-                                 <div className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-tighter">
-                                   {emp.department} {emp.teamName ? `· ${emp.teamName}` : ''}
-                                 </div>
-                               )}
                              </div>
                           </div>
                        </div>
 
                        <div className="flex items-center gap-8 w-full md:w-auto">
                           <div className="flex-1 md:w-64">
-                             <div className="text-[9px] font-mono font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Assigned Operational Role</div>
+                             {/* KPI Function Group — drives which KPIs/sprints are assigned */}
+                             <div className="text-[9px] font-mono font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                               KPI Function Group
+                               <span className="ml-1 text-gray-300 normal-case font-normal">(not a hierarchy role)</span>
+                             </div>
                              <select 
                                className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-4 text-xs font-bold outline-none focus:border-orange-500/30 transition-all shadow-sm group-hover:bg-white"
                                value={emp.playbookRole || ''}
                                onChange={(e) => handleAssignRole(emp._id, e.target.value)}
                              >
-                               <option value="">Assign Role...</option>
+                               <option value="">Assign KPI Group...</option>
                                {playbookRoles.map(r => (
                                  <option key={r.slug} value={r.slug}>{r.name}</option>
                                ))}
@@ -377,17 +422,18 @@ export default function ArenaAdmin() {
                  <CardTitle className="text-lg font-black flex items-center gap-3">
                     <Plus className="h-5 w-5 text-orange-500" /> {editingItem ? 'EDIT KPI' : 'DEFINE NEW KPI'}
                  </CardTitle>
+                 <p className="text-[10px] font-mono text-gray-400 mt-1">KPIs are assigned by functional group (recruiter, coach, etc.) — not by hierarchy role</p>
               </CardHeader>
               <CardContent className="p-8">
                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 items-end">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-mono font-bold uppercase text-gray-400 ml-1">Role</label>
+                       <label className="text-[10px] font-mono font-bold uppercase text-gray-400 ml-1">KPI Function Group</label>
                        <select 
                          className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-4 text-xs font-bold outline-none"
                          value={newKpi.role}
                          onChange={e => setNewKpi({...newKpi, role: e.target.value})}
                        >
-                         <option value="">Select Role...</option>
+                         <option value="">Select Function Group...</option>
                          {playbookRoles.map(r => <option key={r.slug} value={r.slug}>{r.name.toUpperCase()}</option>)}
                        </select>
                     </div>
@@ -458,11 +504,13 @@ export default function ArenaAdmin() {
               {definitions.map(def => (
                 <div key={def._id} style={cardStyle} className="p-6 flex items-center justify-between hover:border-gray-300 transition-all">
                    <div className="flex gap-6 items-center">
-                      <Badge className="bg-gray-100 text-gray-600 border-none font-mono text-[10px] uppercase font-black px-3 py-1">{def.role}</Badge>
+                      <Badge className="bg-gray-100 text-gray-600 border-none font-mono text-[10px] uppercase font-black px-3 py-1">
+                        {def.role}
+                      </Badge>
                       <div>
                          <div className="font-black text-gray-900">{def.label}</div>
                          <div className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">
-                           {def.type} · Target: {String(def.target)}
+                           {def.type} · Target: {String(def.target)} · KPI Group: {def.role}
                          </div>
                       </div>
                    </div>
@@ -488,17 +536,18 @@ export default function ArenaAdmin() {
                  <CardTitle className="text-lg font-black flex items-center gap-3">
                     <Zap className="h-5 w-5 text-orange-500" /> {editingSprint ? 'EDIT SPRINT PLAN' : 'DEFINE SPRINT PLAN'}
                  </CardTitle>
+                 <p className="text-[10px] font-mono text-gray-400 mt-1">Sprint plans are scoped to functional groups — not hierarchy authority roles</p>
               </CardHeader>
               <CardContent className="p-8">
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-mono font-bold uppercase text-gray-400 ml-1">Role</label>
+                       <label className="text-[10px] font-mono font-bold uppercase text-gray-400 ml-1">KPI Function Group</label>
                        <select 
                          className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-4 text-xs font-bold outline-none"
                          value={newSprint.role}
                          onChange={e => setNewSprint({...newSprint, role: e.target.value})}
                        >
-                         <option value="">Select Role...</option>
+                         <option value="">Select Function Group...</option>
                          {playbookRoles.map(r => <option key={r.slug} value={r.slug}>{r.name.toUpperCase()}</option>)}
                        </select>
                     </div>
@@ -580,16 +629,20 @@ export default function ArenaAdmin() {
            <Card className="rounded-[32px] border-none shadow-sm overflow-hidden">
               <CardHeader className="bg-gray-50/50 p-8 border-b border-gray-100">
                  <CardTitle className="text-lg font-black flex items-center gap-3">
-                    <Shield className="h-5 w-5 text-orange-500" /> {editingRole ? 'EDIT PLAYBOOK ROLE' : 'DEFINE NEW PLAYBOOK ROLE'}
+                    <Shield className="h-5 w-5 text-orange-500" /> {editingRole ? 'EDIT KPI FUNCTION GROUP' : 'DEFINE KPI FUNCTION GROUP'}
                  </CardTitle>
+                 <p className="text-[10px] font-mono text-gray-400 mt-1">
+                   These are operational function groups (Recruiter, Coach, etc.) that drive KPI/sprint assignment.
+                   They are NOT hierarchy authority roles. Hierarchy roles (Manager, Team Lead) are managed separately in Team Hierarchy.
+                 </p>
               </CardHeader>
               <CardContent className="p-8">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-mono font-bold uppercase text-gray-400 ml-1">Role Name</label>
+                       <label className="text-[10px] font-mono font-bold uppercase text-gray-400 ml-1">Function Group Name</label>
                        <input 
                          className="w-full h-11 bg-gray-50 border border-gray-100 rounded-xl px-4 text-xs font-bold outline-none"
-                         placeholder="e.g. Sales Expert"
+                         placeholder="e.g. Sales Expert, Field Agent"
                          value={newRole.name}
                          onChange={e => setNewRole({...newRole, name: e.target.value})}
                        />

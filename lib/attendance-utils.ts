@@ -99,37 +99,53 @@ function sessionMins(checkIn: Date, checkOut: Date) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function recomputeAttendanceTotals(att: any) {
+  /**
+   * Returns the authoritative minute count for a session.
+   *
+   * Priority:
+   *  1. s.minutes when it is a positive number (set at checkout)
+   *  2. Compute from checkIn/checkOut timestamps when both exist
+   *  3. 0 for open (not yet checked out) sessions
+   *
+   * We deliberately do NOT fall back to s.workMinutes because that field
+   * can hold stale values from a previous save, causing double-counting.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const getMins = (s: any) => {
-    const explicit = Number.isFinite(Number(s?.minutes)) ? Number(s.minutes) : null;
-    const legacy = Number.isFinite(Number(s?.workMinutes)) ? Number(s.workMinutes) : 0;
-    if (explicit !== null && (explicit > 0 || (explicit === 0 && legacy === 0))) return explicit;
-    if (explicit === 0 && legacy > 0) return legacy;
-    return explicit ?? legacy ?? 0;
+  const getMins = (s: any): number => {
+    // Explicit minutes field set at checkout — most reliable
+    const explicit = Number(s?.minutes);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+    // Compute from timestamps when both are present
+    if (s?.checkIn && s?.checkOut) {
+      const diff = new Date(s.checkOut).getTime() - new Date(s.checkIn).getTime();
+      if (Number.isFinite(diff) && diff > 0) return Math.floor(diff / 60000);
+    }
+
+    // Open session (no checkout yet) — contributes 0 to totals
+    return 0;
   };
 
-  // Sanitize sessions to prevent NaN validation errors
+  // Sanitize sessions and keep workMinutes in sync
   if (Array.isArray(att.sessions)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     att.sessions.forEach((s: any) => {
       const m = getMins(s);
       s.minutes = m;
-      if ((s.type || 'work') !== 'break') {
-        s.workMinutes = m;
-      } else {
-        s.workMinutes = 0;
-      }
+      s.workMinutes = (s.type || 'work') !== 'break' ? m : 0;
     });
   }
 
+  // totalWorkMins = sum of all non-break session minutes (breaks are separate sessions)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   att.totalWorkMins = (att.sessions || []).reduce((sum: number, s: any) => {
-    const mins = getMins(s);
-    return sum + ((s.type || 'work') === 'break' ? 0 : mins);
+    return sum + ((s.type || 'work') === 'break' ? 0 : getMins(s));
   }, 0);
+
+  // totalBreakMins = sum of all break session minutes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   att.totalBreakMins = (att.sessions || []).reduce((sum: number, s: any) => {
-    const mins = getMins(s);
-    return sum + ((s.type || 'work') === 'break' ? mins : 0);
+    return sum + ((s.type || 'work') === 'break' ? getMins(s) : 0);
   }, 0);
 }
 

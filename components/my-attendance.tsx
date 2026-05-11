@@ -300,7 +300,7 @@ export default function MyAttendance() {
               <div className="text-5xl font-bold tracking-widest" style={{ color: modeColor[workMode], fontVariantNumeric: 'tabular-nums' }}>
                 {fmtClock(getLiveWorkSeconds())}
               </div>
-              <div className="text-xs mt-2" style={{ color: '#6b7280' }}>Total Work Hours Today</div>
+              <div className="text-xs mt-2" style={{ color: '#6b7280' }}>Effective Work Hours Today</div>
               {att?.checkInTime && (
                 <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
                   Clocked in at {fmtTime(att.checkInTime)}
@@ -629,7 +629,7 @@ export default function MyAttendance() {
                 </div>
                 <div className="p-3 rounded-xl text-center" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
                   <div className="text-xl font-bold text-gray-900">{att.weeklySummary.totalWorkFormatted || '0m'}</div>
-                  <div className="text-[10px]" style={{ color: '#6b7280' }}>Hours</div>
+                  <div className="text-[10px]" style={{ color: '#6b7280' }}>Work Hours</div>
                 </div>
               </div>
             </div>

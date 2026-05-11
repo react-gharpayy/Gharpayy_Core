@@ -24,10 +24,7 @@ export function weekdayName(dateStr: string) {
 export async function getDefaultPolicy(orgId?: string) {
   const existing = await AttendancePolicy.findOne({ isDefault: true }).lean();
   if (existing) return existing;
-  if (!orgId) return null;
-  const orgPolicy = await AttendancePolicy.findOne({ orgId }).lean();
-  if (orgPolicy) return orgPolicy;
-  const created = await AttendancePolicy.create({ orgId });
+  const created = await AttendancePolicy.create({ name: 'Default Policy', isDefault: true, orgId });
   return created.toObject();
 }
 

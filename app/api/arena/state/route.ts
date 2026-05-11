@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { ArenaDailyState, ArenaKPIDefinition, ArenaSprintPlan, ArenaCommWindow } from '@/models/ArenaState';
 import { PlaybookRole } from '@/models/PlaybookRole';
 import User from '@/models/User';
+import '@/models/HierarchyRole';
 import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
@@ -15,38 +16,58 @@ export async function GET(req: NextRequest) {
     const userId = searchParams.get('userId') || authUser.id;
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-    // SECURITY: If querying for another user, must be admin/manager/hr
     if (userId !== authUser.id && !['admin', 'manager', 'hr'].includes(authUser.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await connectDB();
-    
-    // Fetch user for playbookRole
-    const user = await User.findById(userId).select('fullName email playbookRole workSchedule');
+
+    const user = await User.findById(userId)
+      .select('fullName email playbookRole teamName teamId department jobTitle workSchedule hierarchyRoleId')
+      .populate({ path: 'hierarchyRoleId', select: 'name color level', strictPopulate: false })
+      .lean() as any;
+
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     let state = await ArenaDailyState.findOne({ userId, date });
     if (!state) {
-      state = await ArenaDailyState.create({ 
-        userId, date, kpis: {}, sprints: {}, decisions: [], reportData: {}, shieldMode: false 
+      state = await ArenaDailyState.create({
+        userId, date, kpis: {}, sprints: {}, decisions: [], reportData: {}, shieldMode: false,
       });
     }
 
-    const userRole = user.playbookRole || 'recruiter';
+    const userPlaybookRole = user.playbookRole || 'recruiter';
+    const userTeamSlug = user.teamName ? user.teamName.toLowerCase().replace(/\s+/g, '_') : null;
+
+    // Fetch KPIs/sprints for this user's playbookRole
+    // Also include team-scoped definitions if the user has a team
+    const kpiQuery: any = { role: userPlaybookRole, isActive: true };
+    const sprintQuery: any = { role: userPlaybookRole };
+
     const [kpis, sprints, comms, roleData] = await Promise.all([
-      ArenaKPIDefinition.find({ role: userRole }).sort({ orderIndex: 1 }),
-      ArenaSprintPlan.find({ role: userRole }).sort({ orderIndex: 1 }),
-      ArenaCommWindow.find({ role: userRole }).sort({ orderIndex: 1 }),
-      PlaybookRole.findOne({ slug: userRole })
+      ArenaKPIDefinition.find(kpiQuery).sort({ orderIndex: 1 }),
+      ArenaSprintPlan.find(sprintQuery).sort({ orderIndex: 1 }),
+      ArenaCommWindow.find({ role: userPlaybookRole }).sort({ orderIndex: 1 }),
+      PlaybookRole.findOne({ slug: userPlaybookRole }),
     ]);
 
-    return NextResponse.json({ 
-      ok: true, 
-      state, 
-      user, 
+    return NextResponse.json({
+      ok: true,
+      state,
+      user: {
+        ...user,
+        // Expose team context clearly
+        teamContext: {
+          teamName:   user.teamName   || null,
+          department: user.department || null,
+          jobTitle:   user.jobTitle   || null,
+          hierarchyRole: user.hierarchyRoleId
+            ? { name: (user.hierarchyRoleId as any).name, color: (user.hierarchyRoleId as any).color }
+            : null,
+        },
+      },
       roleData,
-      definitions: { kpis, sprints, comms } 
+      definitions: { kpis, sprints, comms },
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

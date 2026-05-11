@@ -13,14 +13,28 @@ export async function GET(req: NextRequest) {
     if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const role = searchParams.get('role');
+    const role     = searchParams.get('role');
+    const teamSlug = searchParams.get('teamSlug');
 
     await connectDB();
-    
-    const query = role ? { role } : {};
+
+    // Build query — role filter, optional teamSlug filter
+    const kpiQuery: any  = {};
+    const sprintQuery: any = {};
+
+    if (role) {
+      kpiQuery.role    = role;
+      sprintQuery.role = role;
+    }
+    // teamSlug=null means "all teams"; if provided, match exact OR null (global defs)
+    if (teamSlug) {
+      kpiQuery.$or    = [{ teamSlug }, { teamSlug: null }];
+      sprintQuery.$or = [{ teamSlug }, { teamSlug: null }];
+    }
+
     const [kpis, sprints] = await Promise.all([
-      ArenaKPIDefinition.find(query).sort({ role: 1, orderIndex: 1 }),
-      ArenaSprintPlan.find(query).sort({ role: 1, orderIndex: 1 }),
+      ArenaKPIDefinition.find(kpiQuery).sort({ role: 1, orderIndex: 1 }),
+      ArenaSprintPlan.find(sprintQuery).sort({ role: 1, orderIndex: 1 }),
     ]);
 
     return NextResponse.json({ ok: true, kpis, sprints });

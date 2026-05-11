@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import User from '@/models/User';
 import OfficeZone from '@/models/OfficeZone';
+import '@/models/HierarchyRole'; // register for populate
 import { getAuthUser } from '@/lib/auth';
+import { canAccess } from '@/lib/permissions';
 import mongoose from 'mongoose';
 import { orgUpdateSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
@@ -10,16 +12,21 @@ import { ZodError } from 'zod';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapEmployee(e: any) {
   return {
-    _id:        e._id.toString(),
-    fullName:   e.fullName,
-    email:      e.email,
-    role:       e.role,
-    teamName:   e.teamName   || '',
-    department: e.department || '',
-    team:       (e.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
-    jobRole:    e.jobRole    || '',
-    isApproved: e.isApproved,
-    managerId:  e.managerId?.toString?.() || null,
+    _id:             e._id.toString(),
+    fullName:        e.fullName,
+    email:           e.email,
+    role:            e.role,
+    systemRole:      e.systemRole ?? e.role,
+    hierarchyRole:   e.hierarchyRoleId
+      ? { _id: e.hierarchyRoleId._id?.toString(), name: e.hierarchyRoleId.name, color: e.hierarchyRoleId.color, level: e.hierarchyRoleId.level }
+      : null,
+    teamName:        e.teamName   || '',
+    department:      e.department || '',
+    team:            (e.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
+    jobRole:         e.jobRole    || '',
+    isApproved:      e.isApproved,
+    managerId:       e.managerId?.toString?.() || null,
+    managerName:     (e.managerId as any)?.fullName || null,
   };
 }
 
@@ -27,43 +34,68 @@ function mapEmployee(e: any) {
 export async function GET() {
   try {
     const user = await getAuthUser();
-    if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
+    if (!user || !canAccess(user, 'VIEW_TEAM_EMPLOYEES')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectDB();
 
-    const baseQuery = {};
+    // Scoped query: managers see only their direct reports; admins see all
+    const baseQuery: Record<string, unknown> = {};
+    if (user.role === 'manager') {
+      baseQuery.managerId = user.id;
+    }
 
+    // Fetch all users — use only exclusion projections to avoid mixed-projection errors
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const users = await User.find(baseQuery, '-password')
-      .select('-profilePhoto')
-      .populate('officeZoneId', 'name')
-      .populate('managerId', 'fullName email role')
-      .lean() as any[];
+    let users: any[] = [];
+    try {
+      users = await User.find(baseQuery)
+        .select('-password -profilePhoto')
+        .populate('officeZoneId', 'name')
+        .populate('managerId', 'fullName email role')
+        .populate({ path: 'hierarchyRoleId', select: 'name color level slug systemRole', strictPopulate: false })
+        .lean() as any[];
+    } catch (populateErr) {
+      // Fallback: if hierarchyRoleId populate fails (model not yet seeded), fetch without it
+      console.warn('[org GET] hierarchyRoleId populate failed, retrying without it:', populateErr);
+      users = await User.find(baseQuery)
+        .select('-password -profilePhoto')
+        .populate('officeZoneId', 'name')
+        .populate('managerId', 'fullName email role')
+        .lean() as any[];
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const zones = await OfficeZone.find({}).lean() as any[];
 
     const dbManagers = users.filter(u => u.role === 'admin' || u.role === 'manager');
-    const employees  = users.filter(u => u.role === 'employee');
+    // All non-admin users are potential employees in the hierarchy
+    const employees  = users.filter(u => u.role !== 'admin');
 
     // Check if any employees have managerId assigned
-    const hasManagerAssignments = employees.some(e => (e.managerId && (e.managerId as any)._id) || e.managerId);
+    const hasManagerAssignments = employees.some(e => {
+      const mgrId = (e.managerId as any)?._id?.toString?.() || e.managerId?.toString?.() || null;
+      return !!mgrId;
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let tree: any[] = [];
 
     if (hasManagerAssignments && dbManagers.length > 0) {
-      // Group by manager
+      // Group by manager — true hierarchy view
       tree = dbManagers.map(mgr => ({
-        _id:      mgr._id.toString(),
-        fullName: mgr.fullName,
-        email:    mgr.email,
-        role:     mgr.role,
-        team:     (mgr.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
+        _id:       mgr._id.toString(),
+        fullName:  mgr.fullName,
+        email:     mgr.email,
+        role:      mgr.role,
+        systemRole: mgr.systemRole ?? mgr.role,
+        hierarchyRole: mgr.hierarchyRoleId
+          ? { _id: mgr.hierarchyRoleId._id?.toString(), name: mgr.hierarchyRoleId.name, color: mgr.hierarchyRoleId.color, level: mgr.hierarchyRoleId.level }
+          : null,
+        team:      (mgr.officeZoneId as Record<string, unknown>)?.name || 'No Zone',
         groupType: 'manager',
-        reports:  employees
+        reports:   employees
           .filter(e => {
             const mgrId = (e.managerId as any)?._id?.toString?.() || e.managerId?.toString?.() || null;
             return mgrId === mgr._id.toString();
@@ -71,40 +103,46 @@ export async function GET() {
           .map(e => mapEmployee(e)),
       }));
     } else {
-      // Group by office zone instead
+      // Fallback: group by office zone when no manager assignments exist
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tree = zones.map((z: any) => ({
-        _id:      z._id.toString(),
-        fullName: z.name,
-        email:    '',
-        role:     'zone',
-        team:     z.name,
+        _id:       z._id.toString(),
+        fullName:  z.name,
+        email:     '',
+        role:      'zone',
+        systemRole: 'zone',
+        hierarchyRole: null,
+        team:      z.name,
         groupType: 'zone',
-        reports:  employees
-          .filter(e => e.officeZoneId?._id?.toString() === z._id.toString() ||
-                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                       (e.officeZoneId as any)?._id?.toString() === z._id.toString())
+        reports:   employees
+          .filter(e => e.officeZoneId?._id?.toString() === z._id.toString())
           .map(e => mapEmployee(e)),
       })).filter(z => z.reports.length > 0);
     }
 
-    // Unassigned = employees with no managerId AND no officeZoneId
-    const unassigned = hasManagerAssignments
-      ? employees.filter(e => {
-        const mgrId = (e.managerId as any)?._id?.toString?.() || e.managerId?.toString?.() || null;
-        return !mgrId;
-      }).map(e => mapEmployee(e))
-      : []; // when grouping by zone, all should be in a zone
+    // Unassigned employees — always computed regardless of grouping mode
+    const unassigned = employees.filter(e => {
+      const mgrId = (e.managerId as any)?._id?.toString?.() || e.managerId?.toString?.() || null;
+      return !mgrId;
+    }).map(e => mapEmployee(e));
 
-    // Available managers for dropdown (DB managers + static admin)
-    const availableManagers = [
-      ...dbManagers.map(m => ({
-        _id:      m._id.toString(),
-        fullName: m.fullName,
-        email:    m.email,
-        role:     m.role,
-      })),
-    ];
+    // Available managers for dropdown — admin/manager role users
+    // Also include employees who have been assigned a manager-tier hierarchy role
+    const availableManagers = users
+      .filter(u => u.role === 'admin' || u.role === 'manager' ||
+        (u.hierarchyRoleId && ['manager', 'team_lead'].includes(u.hierarchyRoleId.systemRole ?? '')))
+      .map(m => ({
+        _id:           m._id.toString(),
+        fullName:      m.fullName,
+        email:         m.email,
+        role:          m.role,
+        systemRole:    m.systemRole ?? m.role,
+        hierarchyRole: m.hierarchyRoleId
+          ? { name: m.hierarchyRoleId.name, color: m.hierarchyRoleId.color }
+          : null,
+      }));
+
+    console.log(`[org GET] total=${users.length} managers=${dbManagers.length} employees=${employees.length} unassigned=${unassigned.length} tree=${tree.length}`);
 
     return NextResponse.json({
       ok: true,
@@ -115,7 +153,7 @@ export async function GET() {
       availableManagers,
     });
   } catch (e: unknown) {
-    console.error('API error:', e);
+    console.error('[org GET] error:', e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -165,3 +203,5 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+

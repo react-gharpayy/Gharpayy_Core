@@ -63,6 +63,10 @@ export async function POST(req: NextRequest) {
       fullName: user.fullName,
       role:     user.role,
       playbookRole: user.playbookRole,
+      // Include hierarchy fields in token for permission checks
+      systemRole: user.systemRole ?? user.role,
+      teamId:     user.teamId?.toString() ?? null,
+      hierarchyRoleId: user.hierarchyRoleId?.toString() ?? null,
     };
 
     const token = signToken(tokenPayload);
