@@ -151,7 +151,7 @@ export default function WorkScheduleSettings() {
     // Overlap check (basic)
     const sortedBreaks = [...breaks].sort((a, b) => a.start.localeCompare(b.start));
     for (let i = 0; i < sortedBreaks.length - 1; i++) {
-      if (sortedBreaks[i].end > sortedBreaks[i+1].start) {
+      if (sortedBreaks[i].end > sortedBreaks[i + 1].start) {
         setMsg({ ok: false, text: 'Breaks cannot overlap' });
         return;
       }
@@ -270,8 +270,8 @@ export default function WorkScheduleSettings() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-700 mb-1.5">Work Start Time</label>
-            <input type="time" value={startTime} 
-              disabled={disableInputs} 
+            <input type="time" value={startTime}
+              disabled={disableInputs}
               onChange={(e) => {
                 setStartTime(e.target.value);
                 if (!isCustom) setShiftType('CUSTOM');
@@ -281,8 +281,8 @@ export default function WorkScheduleSettings() {
           </div>
           <div>
             <label className="block text-xs text-gray-700 mb-1.5">Work End Time</label>
-            <input type="time" value={endTime} 
-              disabled={disableInputs} 
+            <input type="time" value={endTime}
+              disabled={disableInputs}
               onChange={(e) => {
                 setEndTime(e.target.value);
                 if (!isCustom) setShiftType('CUSTOM');
