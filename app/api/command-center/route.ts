@@ -8,7 +8,8 @@ import Tracker from '@/models/Tracker';
 import '@/models/OfficeZone';
 import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr } from '@/lib/attendance-utils';
-import { isAdmin, isElevated, buildEmployeeFilter } from '@/lib/role-guards';
+import { buildScopedEmployeeFilter, isAdmin } from '@/lib/permissions';
+import mongoose from 'mongoose';
 
 function fmtTime(d: Date) {
   return new Date(d).toLocaleTimeString('en-IN', {
@@ -22,61 +23,138 @@ function getISTDateDaysAgo(days: number) {
   return getISTDateStr(d);
 }
 
+// Safe settled result unwrapper
+function settled<T>(result: PromiseSettledResult<T>, fallback: T): T {
+  if (result.status === 'fulfilled') return result.value;
+  console.error('[command-center] Sub-query failed:', result.reason);
+  return fallback;
+}
+
 export async function GET() {
   try {
     const user = await getAuthUser();
-    if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const start = Date.now();
+
+    // FAIL-SAFE: admin always passes. Also allow hr, manager, team_lead via role or systemRole.
+    const ALLOWED_ROLES = ['admin', 'manager', 'hr', 'team_lead', 'sub_admin'];
+    const userRole = user?.systemRole || user?.role || '';
+    const legacyRole = user?.role || '';
+
+    if (!user || (!ALLOWED_ROLES.includes(userRole) && !ALLOWED_ROLES.includes(legacyRole) && !isAdmin(user))) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[command-center] Unauthorized user role: role=${user?.role}, systemRole=${user?.systemRole}`);
+      }
+      return NextResponse.json({ 
+        ok: false, 
+        error: 'Unauthorized: Insufficient role to access command center',
+        fallbackData: null,
+      }, { status: 403 });
     }
 
     await connectDB();
     const today = getISTDateStr();
+    const yDate = getISTDateDaysAgo(1);
 
-    // Build employee filter - manager sees only their team
-    const empFilter = buildEmployeeFilter(user, { isApproved: { $ne: false }, role: 'employee' });
-    if (empFilter === null) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // FAIL-SAFE hierarchy scope: admins/HR get all, managers get subtree
+    let empFilter: Record<string, unknown> = { isApproved: { $ne: false }, role: 'employee' };
+    const scoped = await buildScopedEmployeeFilter(user, { isApproved: { $ne: false }, role: 'employee' });
+    if (scoped) {
+      empFilter = scoped;
+    }
+    // If null (would mean employee), admins still get all
+    if (!scoped && isAdmin(user)) {
+      empFilter = { isApproved: { $ne: false }, role: 'employee' };
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const employees = await User.find(empFilter, 'fullName email officeZoneId')
-      .select('-profilePhoto')
-      .populate('officeZoneId', 'name').lean() as any[];
+    const employees = await User.find(empFilter, 'fullName email officeZoneId playbookRole')
+      .lean() as any[];
 
     const total = employees.length;
+    const employeeIds = employees.map(e => e._id);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const todayAtt = await Attendance.find({
-      employeeId: { $in: employees.map(e => e._id) },
-      date: today,
-    }).lean() as any[];
+    // RESILIENT: Use Promise.allSettled so one failure doesn't crash everything
+    const [todayAttRes, yAttRes, taskStatsRes, pendingApprovalsRes, trackerStatsRes, officeZonesRes] = 
+      await Promise.allSettled([
+        Attendance.find({ employeeId: { $in: employeeIds }, date: today }, 'employeeId workMode dayStatus sessions isCheckedIn isOnBreak isInField').lean(),
+        Attendance.find({ employeeId: { $in: employeeIds }, date: yDate }, 'employeeId dayStatus').lean(),
+        (async () => {
+          const isManagerRole = ['manager', 'team_lead'].includes(legacyRole) || ['manager', 'team_lead'].includes(userRole);
+          const taskFilter = isManagerRole ? { assignedTo: { $in: employeeIds } } : {};
+          
+          const stats = await Task.aggregate([
+            { $match: taskFilter },
+            { $group: {
+                _id: null,
+                total: { $sum: 1 },
+                blocked: { $sum: { $cond: [{ $eq: ['$status', 'blocked'] }, 1, 0] } },
+                completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+                overdue: { $sum: { $cond: [{ $and: [{ $not: { $in: ['$status', ['completed', 'cancelled']] } }, { $lt: ['$dueDate', today] }] }, 1, 0] } }
+              }
+            }
+          ]);
+          
+          const { total = 0, blocked = 0, completed = 0, overdue = 0 } = stats[0] || {};
+          return { total, blocked, completed, overdue };
+        })(),
+        (async () => {
+          const isManagerRole = ['manager', 'team_lead'].includes(legacyRole) || ['manager', 'team_lead'].includes(userRole);
+          if (isManagerRole) {
+            return ExceptionRequest.countDocuments({ status: 'pending', employeeId: { $in: employeeIds } });
+          }
+          return ExceptionRequest.countDocuments({ status: 'pending' });
+        })(),
+        (async () => {
+          const isManagerRole = ['manager', 'team_lead'].includes(legacyRole) || ['manager', 'team_lead'].includes(userRole);
+          const trackerFilter: any = isManagerRole ? { employeeId: { $in: employeeIds } } : {};
+          
+          const trackerTotal = isManagerRole
+            ? total
+            : await User.countDocuments({ role: { $in: ['admin', 'manager', 'employee'] }, isApproved: { $ne: false } });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const attMap = new Map(todayAtt.map((a: any) => [a.employeeId.toString(), a]));
+          const weekStart = getISTDateDaysAgo(6);
+          const monthStart = `${today.slice(0, 7)}-01`;
 
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    const yDate = y.toISOString().split('T')[0];
+          const stats = await Tracker.aggregate([
+            { $match: { ...trackerFilter, date: { $gte: monthStart, $lte: today } } },
+            { $group: {
+                _id: null,
+                submittedMonth: { $sum: { $cond: [{ $eq: ['$isSubmitted', true] }, 1, 0] } },
+                submittedWeek: { $sum: { $cond: [{ $and: [{ $gte: ['$date', weekStart] }, { $eq: ['$isSubmitted', true] }] }, 1, 0] } },
+                submittedToday: { $sum: { $cond: [{ $and: [{ $eq: ['$date', today] }, { $eq: ['$isSubmitted', true] }] }, 1, 0] } },
+                editedToday: { $sum: { $cond: [{ $and: [{ $eq: ['$date', today] }, { $eq: ['$isEdited', true] }] }, 1, 0] } }
+              }
+            }
+          ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const yAtt = await Attendance.find({
-      employeeId: { $in: employees.map(e => e._id) },
-      date: yDate,
-    }).lean() as any[];
+          const { submittedToday = 0, editedToday = 0, submittedWeek = 0, submittedMonth = 0 } = stats[0] || {};
+          return { trackerTotal, submittedToday, editedToday, submittedWeek, submittedMonth };
+        })(),
+        (async () => {
+          const empZoneIds = [...new Set(employees.filter(e => e.officeZoneId).map(e => e.officeZoneId.toString()))];
+          return (await mongoose.model('GpOfficeZone').find({ _id: { $in: empZoneIds } }, 'name').lean()) as unknown as any[];
+        })(),
+      ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const yesterdayPresent = yAtt.filter((a: any) => (a.dayStatus || 'Absent') !== 'Absent').length;
+    // Unpack with safe defaults
+    const todayAtt = settled(todayAttRes, []);
+    const yAtt = settled(yAttRes, []);
+    const taskStats = settled(taskStatsRes, { total: 0, blocked: 0, completed: 0, overdue: 0 });
+    const pendingApprovals = settled(pendingApprovalsRes, 0);
+    const trackerStats = settled(trackerStatsRes, { trackerTotal: 0, submittedToday: 0, editedToday: 0, submittedWeek: 0, submittedMonth: 0 });
+    const officeZones = settled(officeZonesRes, []);
+
+    const attMap = new Map((todayAtt as any[]).map((a: any) => [a.employeeId.toString(), a]));
+    const yesterdayPresent = (yAtt as any[]).filter((a: any) => (a.dayStatus || 'Absent') !== 'Absent').length;
+    const zoneMap = new Map((officeZones as any[]).map((z: any) => [z._id.toString(), z.name]));
 
     let presentCount = 0, absentCount = 0, lateCount = 0, earlyCount = 0, onTimeCount = 0, breakCount = 0, fieldCount = 0;
 
     const teamPulse = employees.map(emp => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const att = attMap.get(emp._id.toString()) as any;
       let workMode = 'Absent', dayStatus = 'Absent', checkInTime = null;
       if (att) {
         workMode  = att.workMode || (att.isOnBreak ? 'Break' : att.isInField ? 'Field' : att.isCheckedIn ? 'Present' : 'Absent');
         dayStatus = att.dayStatus || 'Absent';
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const firstWork = att.sessions?.find((s: any) => s.type === 'work' || !s.type);
         if (firstWork) checkInTime = fmtTime(new Date(firstWork.checkIn));
       }
@@ -89,9 +167,8 @@ export async function GET() {
       if (dayStatus === 'On Time') onTimeCount++;
       return {
         employeeId:   emp._id.toString(),
-        employeeName: emp.fullName,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        team: (emp.officeZoneId as any)?.name || 'No Zone',
+        employeeName: emp.fullName ?? 'Unknown',
+        team: zoneMap.get(emp.officeZoneId?.toString()) || 'No Zone',
         workMode, dayStatus, checkInTime,
       };
     }).sort((a, b) => {
@@ -99,44 +176,12 @@ export async function GET() {
       return (o[a.workMode] ?? 4) - (o[b.workMode] ?? 4);
     });
 
-    // Tasks - manager sees their team employees
-    const taskSummary = { blocked: 0, overdue: 0, total: 0, completed: 0 };
-    try {
-      const taskFilter =
-        user.role === 'manager'
-          ? { assignedTo: { $in: employees.map(e => e._id) } }
-          : {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tasks = await Task.find(taskFilter).lean() as any[];
-      taskSummary.total     = tasks.length;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      taskSummary.blocked   = tasks.filter((t: any) => t.status === 'blocked').length;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      taskSummary.overdue   = tasks.filter((t: any) => t.status !== 'completed' && t.status !== 'cancelled' && t.dueDate && t.dueDate < today).length;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      taskSummary.completed = tasks.filter((t: any) => t.status === 'completed').length;
-    } catch { /* ignore */ }
-
-    // Pending approvals - manager sees only their team's exceptions
-    let pendingApprovals = 0;
-    try {
-      if (user.role === 'manager') {
-        const teamEmployeeIds = employees.map(e => e._id);
-        pendingApprovals = await ExceptionRequest.countDocuments({
-          status: 'pending',
-          employeeId: { $in: teamEmployeeIds },
-        });
-      } else {
-        pendingApprovals = await ExceptionRequest.countDocuments({ status: 'pending' });
-      }
-    } catch { /* ignore */ }
-
-    const attendanceRate    = total > 0 ? Math.round((presentCount / total) * 100) : 0;
-    const onTimeRate        = presentCount > 0 ? Math.round((onTimeCount / Math.max(presentCount, 1)) * 100) : 0;
+    const taskSummary = taskStats;
+    const attendanceRate     = total > 0 ? Math.round((presentCount / total) * 100) : 0;
+    const onTimeRate         = presentCount > 0 ? Math.round((onTimeCount / Math.max(presentCount, 1)) * 100) : 0;
     const taskCompletionRate = taskSummary.total > 0 ? Math.round((taskSummary.completed / taskSummary.total) * 100) : 0;
-    const breakDiscipline   = Math.max(0, 100 - (breakCount * 5));
+    const breakDiscipline    = Math.max(0, 100 - (breakCount * 5));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const needAction: any[] = [];
     if (taskSummary.blocked > 0)    needAction.push({ type: 'blocked_tasks', count: taskSummary.blocked, label: `${taskSummary.blocked} blocked task${taskSummary.blocked > 1 ? 's' : ''}` });
     if (lateCount > 0)               needAction.push({ type: 'late', count: lateCount, label: `${lateCount} employee${lateCount > 1 ? 's' : ''} late today` });
@@ -145,27 +190,16 @@ export async function GET() {
       needAction.push({ type: 'attendance_drop', count: yesterdayPresent - presentCount, label: `Attendance drop vs yesterday: -${yesterdayPresent - presentCount}` });
     }
 
-    // Tracker compliance (all roles)
-    const trackerUsers = await User.find({ role: { $in: ['admin', 'manager', 'employee'] }, isApproved: { $ne: false } })
-      .select('_id')
-      .lean();
-    const trackerIds = trackerUsers.map(u => u._id);
-    const trackerTotal = trackerIds.length;
-    const trackerSubmittedToday = await Tracker.countDocuments({ date: today, employeeId: { $in: trackerIds }, isSubmitted: true });
-    const trackerEditedToday = await Tracker.countDocuments({ date: today, employeeId: { $in: trackerIds }, isEdited: true });
-    const weekStart = getISTDateDaysAgo(6);
-    const monthStart = `${today.slice(0, 7)}-01`;
-    const trackerSubmittedWeek = await Tracker.countDocuments({ date: { $gte: weekStart, $lte: today }, employeeId: { $in: trackerIds }, isSubmitted: true });
-    const trackerSubmittedMonth = await Tracker.countDocuments({ date: { $gte: monthStart, $lte: today }, employeeId: { $in: trackerIds }, isSubmitted: true });
-    const trackerExpectedWeek = trackerTotal * 7;
+    const { trackerTotal, submittedToday, editedToday, submittedWeek, submittedMonth } = trackerStats;
+    const trackerExpectedWeek  = trackerTotal * 7;
     const trackerExpectedMonth = trackerTotal * (new Date(today).getDate());
     const trackerCompliance = {
-      daily: trackerTotal > 0 ? Math.round((trackerSubmittedToday / trackerTotal) * 100) : 0,
-      weekly: trackerExpectedWeek > 0 ? Math.round((trackerSubmittedWeek / trackerExpectedWeek) * 100) : 0,
-      monthly: trackerExpectedMonth > 0 ? Math.round((trackerSubmittedMonth / trackerExpectedMonth) * 100) : 0,
-      submittedToday: trackerSubmittedToday,
-      missingToday: Math.max(0, trackerTotal - trackerSubmittedToday),
-      editedToday: trackerEditedToday,
+      daily:   trackerTotal > 0 ? Math.round((submittedToday / trackerTotal) * 100) : 0,
+      weekly:  trackerExpectedWeek  > 0 ? Math.round((submittedWeek  / trackerExpectedWeek)  * 100) : 0,
+      monthly: trackerExpectedMonth > 0 ? Math.round((submittedMonth / trackerExpectedMonth) * 100) : 0,
+      submittedToday,
+      missingToday: Math.max(0, trackerTotal - submittedToday),
+      editedToday,
     };
 
     const healthScore = Math.round(
@@ -185,7 +219,19 @@ export async function GET() {
       teamPulse, taskSummary, pendingApprovals, needAction,
     });
   } catch (e: unknown) {
-    console.error('API error:', e);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[command-center] Fatal API error:', e);
+    return NextResponse.json({ 
+      ok: false,
+      error: 'Internal server error',
+      fallbackData: {
+        summary: { total: 0, present: 0, absent: 0, late: 0, early: 0, onTime: 0, onBreak: 0, inField: 0, activeNow: 0 },
+        healthScore: 0,
+        kpis: { attendance: 0, onTimeRate: 0, taskCompletion: 0, breakDiscipline: 0 },
+        teamPulse: [],
+        taskSummary: { blocked: 0, overdue: 0, total: 0, completed: 0 },
+        pendingApprovals: 0,
+        needAction: [],
+      }
+    }, { status: 500 });
   }
 }

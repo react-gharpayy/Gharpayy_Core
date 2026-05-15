@@ -67,19 +67,23 @@ export async function GET(req: NextRequest) {
     const baseFilter: any = { isApproved: { $ne: false } };
     if (team) baseFilter.officeZoneId = team;
     if (manager) baseFilter.managerId = manager;
-    const empFilter = buildEmployeeFilter(auth, baseFilter);
+    const empFilter = await buildEmployeeFilter(auth, baseFilter);
     if (empFilter === null) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
     const users = await User.find(empFilter)
       .select('fullName role officeZoneId')
       .populate('officeZoneId', 'name')
       .lean() as any[];
+    
+    console.log(`[break-report] Found ${users.length} users for filter`);
     const employeeIds = users.map(u => u._id);
 
     const rows = await Attendance.find({
       employeeId: { $in: employeeIds },
       date: { $gte: start, $lte: end },
     }).lean() as any[];
+
+    console.log(`[break-report] Fetched ${rows.length} total attendance records for range ${start} to ${end}`);
 
     const attMap = new Map<string, any>();
     rows.forEach(r => {
@@ -105,29 +109,39 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const summaryMap = new Map<string, { totalBreakMins: number; totalWorkMins: number }>();
+    rows.forEach(r => {
+      const eid = r.employeeId.toString();
+      const existing = summaryMap.get(eid) || { totalBreakMins: 0, totalWorkMins: 0 };
+      summaryMap.set(eid, {
+        totalBreakMins: existing.totalBreakMins + Number(r.totalBreakMins || 0),
+        totalWorkMins: existing.totalWorkMins + Number(r.totalWorkMins || 0),
+      });
+    });
+
     const weeklySummary = users.map(u => {
-      const teamName = (u.officeZoneId as any)?.name || 'No Zone';
-      const sum = rows
-        .filter(r => r.employeeId.toString() === u._id.toString())
-        .reduce((acc, r) => acc + Number(r.totalBreakMins || 0), 0);
-      const work = rows
-        .filter(r => r.employeeId.toString() === u._id.toString())
-        .reduce((acc, r) => acc + Number(r.totalWorkMins || 0), 0);
+      const eid = u._id.toString();
+      const totals = summaryMap.get(eid) || { totalBreakMins: 0, totalWorkMins: 0 };
       return {
-        employeeId: u._id.toString(),
+        employeeId: eid,
         employeeName: u.fullName,
         role: u.role,
-        team: teamName,
-        totalBreakMins: sum,
-        totalWorkMins: work,
+        team: (u.officeZoneId as any)?.name || 'No Zone',
+        totalBreakMins: totals.totalBreakMins,
+        totalWorkMins: totals.totalWorkMins,
       };
     });
 
     return NextResponse.json({
-      ok: true,
+      success: true,
       mode,
       range: { start, end },
       days,
+      data: {
+        dailyRows,
+        weeklySummary,
+      },
+      // For backward compatibility
       dailyRows,
       weeklySummary,
     });

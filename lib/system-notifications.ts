@@ -1,5 +1,6 @@
 import Notice from '@/models/Notice';
 import User from '@/models/User';
+import { NotificationService } from '@/modules/notifications/notification.service';
 
 type NoticeType = 'general' | 'warning' | 'urgent';
 
@@ -26,6 +27,19 @@ async function createSystemNoticeOnce(args: {
     createdByName: 'System',
     readBy: [],
   });
+
+  // Also create a notification in the new system if there's a target user
+  if (args.targetId) {
+    await NotificationService.createNotification({
+      userId: args.targetId,
+      type: 'ATTENDANCE_ALERT',
+      title: args.title,
+      message: args.message,
+      link: '/home',
+      metadata: { key: args.key, date: args.date }
+    });
+  }
+
   return true;
 }
 
@@ -62,26 +76,37 @@ export async function notifyLateAlert(args: {
   graceMinutes: number;
 }) {
   if (!args.lateByMins || args.lateByMins <= 0) return;
+  
+  const user = await User.findById(args.employeeId, 'role managerId').lean() as any;
+  if (!user) return;
+
   const title = 'Late Attendance Alert';
   const message = `Late by ${args.lateByMins} mins (Shift ${args.shiftStart}, Grace ${args.graceMinutes}m, Clock-in ${args.clockInLabel} IST)`;
 
-  await createSystemNoticeOnce({
-    key: 'late_alert_employee',
-    date: args.date,
-    title,
-    message,
-    type: 'warning',
-    targetId: args.employeeId,
-    targetName: args.employeeName,
-  });
+  // Personal notification - only for employees
+  if (user.role === 'employee') {
+    await createSystemNoticeOnce({
+      key: 'late_alert_employee',
+      date: args.date,
+      title,
+      message,
+      type: 'warning',
+      targetId: args.employeeId,
+      targetName: args.employeeName,
+    });
+  }
 
-  await notifyAdminsAndManagersOnce({
-    key: `late_alert_${args.employeeId}`,
-    date: args.date,
-    title: `Late Alert: ${args.employeeName}`,
-    message: `${args.employeeName} clocked in late by ${args.lateByMins} mins`,
-    type: 'warning',
-  });
+  // Manager notification - only if employee has a manager
+  if (user.managerId) {
+    await createSystemNoticeOnce({
+      key: `late_alert_mgr_${args.employeeId}`,
+      date: args.date,
+      title: `Late Alert: ${args.employeeName}`,
+      message: `${args.employeeName} clocked in late by ${args.lateByMins} mins`,
+      type: 'warning',
+      targetId: String(user.managerId),
+    });
+  }
 }
 
 export async function notifyMissedClockOut(args: {
@@ -89,23 +114,33 @@ export async function notifyMissedClockOut(args: {
   employeeName: string;
   date: string;
 }) {
-  await createSystemNoticeOnce({
-    key: 'missed_clock_out_employee',
-    date: args.date,
-    title: 'Missed Clock-out Auto-Closed',
-    message: `Your ${args.date} session was auto-closed at day end. Raise an exception if correction is needed.`,
-    type: 'warning',
-    targetId: args.employeeId,
-    targetName: args.employeeName,
-  });
+  const user = await User.findById(args.employeeId, 'role managerId').lean() as any;
+  if (!user) return;
 
-  await notifyAdminsAndManagersOnce({
-    key: `missed_clock_out_${args.employeeId}`,
-    date: args.date,
-    title: `Missed Clock-out: ${args.employeeName}`,
-    message: `Auto-closed ${args.employeeName}'s open session for ${args.date}.`,
-    type: 'warning',
-  });
+  // Personal notification - only for employees
+  if (user.role === 'employee') {
+    await createSystemNoticeOnce({
+      key: 'missed_clock_out_employee',
+      date: args.date,
+      title: 'Missed Clock-out Auto-Closed',
+      message: `Your ${args.date} session was auto-closed at day end. Raise an exception if correction is needed.`,
+      type: 'warning',
+      targetId: args.employeeId,
+      targetName: args.employeeName,
+    });
+  }
+
+  // Manager notification - only if employee has a manager
+  if (user.managerId) {
+    await createSystemNoticeOnce({
+      key: `missed_clock_out_mgr_${args.employeeId}`,
+      date: args.date,
+      title: `Missed Clock-out: ${args.employeeName}`,
+      message: `Auto-closed ${args.employeeName}'s open session for ${args.date}.`,
+      type: 'warning',
+      targetId: String(user.managerId),
+    });
+  }
 }
 
 export async function notifyDailySummary(args: {
@@ -118,6 +153,9 @@ export async function notifyDailySummary(args: {
   lateByMins: number;
   earlyByMins: number;
 }) {
+  const user = await User.findById(args.employeeId, 'role').lean() as any;
+  if (!user || user.role !== 'employee') return;
+
   const workH = Math.floor((args.totalWorkMins || 0) / 60);
   const workM = (args.totalWorkMins || 0) % 60;
   const breakM = args.totalBreakMins || 0;

@@ -1,64 +1,59 @@
-import type { AuthPayload } from '@/types';
-
 /**
- * role-guards.ts
- * Centralized role-check helpers for the sub_admin feature.
- * Import these in API routes to keep role logic consistent.
- * DO NOT modify existing auth logic - only ADD new checks here.
+ * lib/role-guards.ts
+ *
+ * Backward-compatible role guard helpers.
+ * These functions are kept for existing code that imports them.
+ * New code should use lib/permissions.ts directly.
+ *
+ * @deprecated Use canAccess(), buildScopedEmployeeFilter(), etc. from lib/permissions.ts
  */
+
+import type { AuthPayload } from '@/types';
+import {
+  isAdmin as _isAdmin,
+  isElevated as _isElevated,
+  buildScopedEmployeeFilter,
+  canAccessEmployeeData,
+} from '@/lib/permissions';
 
 /** Returns true if the user is a full admin */
 export function isAdmin(user: AuthPayload): boolean {
-  return user.role === 'admin';
+  return _isAdmin(user);
 }
 
 /** Returns true if the user has elevated access (admin or manager) */
 export function isElevated(user: AuthPayload): boolean {
-  return ['admin', 'manager'].includes(user.role);
+  return _isElevated(user);
 }
 
+/** @deprecated sub_admin is now mapped to manager via systemRole */
 export function isSubAdmin(user: AuthPayload): boolean {
   return user.role === 'sub_admin';
 }
 
 /**
  * Builds a MongoDB employee filter scoped to the caller's role.
+ * Delegates to the new permission system.
  *
- * - admin             => returns base filter (sees everyone)
- * - manager           => returns base filter (sees everyone like admin)
- * - employee          => returns null (not allowed to query employees)
- *
- * @param user   Decoded JWT payload
- * @param base   Any extra filter conditions to merge in
- * @returns A filter object or null if the caller is not permitted
+ * @deprecated Use buildScopedEmployeeFilter from lib/permissions.ts
  */
-export function buildEmployeeFilter(
+export async function buildEmployeeFilter(
   user: AuthPayload,
   base: Record<string, unknown> = {}
-): Record<string, unknown> | null {
-  if (user.role === 'employee') return null;
-
-  // admin - unrestricted visibility
-  if (user.role === 'admin') {
-    return base;
-  }
-
-  // manager - unrestricted visibility like admin
-  if (user.role === 'manager') {
-    return base;
-  }
-
-  return base;
+): Promise<Record<string, unknown> | null> {
+  return await buildScopedEmployeeFilter(user, base);
 }
 
 /**
  * Verifies that a given employee can be accessed by the user.
- * Always returns true for admin.
+ *
+ * @deprecated Use canAccessEmployeeData from lib/permissions.ts
  */
-export function canAccessEmployee(
+export async function canAccessEmployee(
   user: AuthPayload,
-  employeeId: string | null | undefined
-): boolean {
-  if (user.role === 'admin') return true;
-  return false; // For other roles, access should be verified by queries using managerId
+  employeeId: string | null | undefined,
+  employeeManagerId?: string | null
+): Promise<boolean> {
+  if (!employeeId) return false;
+  return await canAccessEmployeeData(user, employeeId, employeeManagerId);
 }

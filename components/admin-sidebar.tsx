@@ -3,10 +3,22 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, BarChart2, ClipboardList, ClipboardCheck,
-  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound, Calendar, Heart, Target
+  Bell, GitBranch, CheckSquare, FileText, LogOut, Menu, X, Settings, UserRound, Calendar, Heart, Target, Lightbulb, Sparkles, ShieldCheck, Trophy, ShoppingBag
 } from 'lucide-react';
 import { getCurrentWeekInfo } from '@/lib/week-utils';
 import GiveKudoModal from '@/components/GiveKudoModal';
+import { NotificationBell } from '@/modules/notifications/components/NotificationBell';
+import { cn } from '@/lib/utils';
+
+const isActiveRoute = (pathname: string, href: string, exact = false) => {
+  if (exact) return pathname === href;
+  if (href === '/command-center') return pathname === '/command-center' || pathname === '/';
+  // Ensure that if we're matching a parent route, it doesn't accidentally match sub-routes that have their own nav items
+  if (href === '/admin') return pathname === '/admin'; // Exact match for employee management
+  if (href === '/growth/admin') return pathname === '/growth/admin'; // Exact match for growth governance
+  
+  return pathname === href || pathname.startsWith(href + '/');
+};
 
 const NAV_ITEMS = [
   { label: 'Workforce Overview', href: '/command-center', icon: LayoutDashboard },
@@ -19,8 +31,15 @@ const NAV_ITEMS = [
   { label: 'Performance Analytics', href: '/kpis', icon: BarChart2 },
   { label: 'Team Hierarchy', href: '/team-hierarchy', icon: GitBranch },
   { label: 'Approval Center', href: '/approvals', icon: CheckSquare },
+  { label: '1:1 Sessions', href: '/coaching', icon: Lightbulb },
+  { label: 'Coach AI', href: '/coach-ai', icon: Sparkles },
+  { label: 'Growth Governance', href: '/growth/admin', icon: ShieldCheck, exact: true },
+  { label: 'Leaderboard', href: '/growth/leaderboard', icon: Trophy },
+  { label: 'Reward Management', href: '/growth/admin/rewards', icon: ShoppingBag },
+  { label: 'Quest Management', href: '/growth/admin/quests', icon: Target },
+  { label: 'Economy Analytics', href: '/growth/admin/analytics', icon: BarChart2 },
   { label: 'Reports', href: '/reports', icon: FileText },
-  { label: 'Employee Management', href: '/admin', icon: Users },
+  { label: 'Employee Management', href: '/admin', icon: Users, exact: true },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
   { label: 'Holiday Calendar', href: '/holidays', icon: Calendar },
   { label: 'Employee Profile', href: '/employee-profile', icon: UserRound },
@@ -39,6 +58,13 @@ const MANAGER_ALLOWED = new Set([
   '/kpis',
   '/kudos',
   '/arena-admin',
+  '/coaching',
+  '/coach-ai',
+  '/growth/admin',
+  '/growth/admin/rewards',
+  '/growth/admin/quests',
+  '/growth/admin/analytics',
+  '/growth/leaderboard',
 ]);
 
 function initials(name: string) {
@@ -74,13 +100,6 @@ export default function AdminSidebar() {
         if (d.pendingCount !== undefined) setApprovalCount(d.pendingCount);
       })
       .catch(() => {});
-
-    fetch('/api/kudos/employees')
-      .then(r => r.json())
-      .then(d => {
-        if (d.employees) setEmployees(d.employees);
-      })
-      .catch(() => {});
   }, []);
 
   const logout = async () => {
@@ -88,8 +107,7 @@ export default function AdminSidebar() {
     router.push('/login');
   };
 
-  const isActive = (href: string) =>
-    href === '/command-center' ? pathname === '/command-center' || pathname === '/' : pathname.startsWith(href);
+  const isActive = (href: string, exact = false) => isActiveRoute(pathname, href, exact);
 
   const getBadge = (href: string) => {
     if (href === '/approvals') return approvalCount;
@@ -97,45 +115,65 @@ export default function AdminSidebar() {
     return 0;
   };
 
-  const flatItems = user?.role === 'manager'
+  const flatItems = (user?.role === 'manager'
     ? NAV_ITEMS.filter(item => MANAGER_ALLOWED.has(item.href))
-    : NAV_ITEMS;
+    : NAV_ITEMS
+  ).filter(item => {
+    const isGrowthAdmin = item.href === '/growth/admin';
+    if (isGrowthAdmin) return user?.growthEngineEnabled || process.env.NEXT_PUBLIC_ENABLE_GROWTH_ENGINE === 'true';
+    return true;
+  });
 
   return (
     <>
       <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 bg-white border-r border-gray-200 overflow-hidden">
         <div className="px-5 py-5 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Gharpayy" className="w-12 h-12 rounded-xl object-cover" />
-            <div>
-              <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
-              <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Gharpayy" className="w-12 h-12 rounded-xl object-cover" />
+              <div>
+                <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
+                <div className="text-[11px] text-orange-500 font-semibold uppercase tracking-wider">Arena OS</div>
+              </div>
             </div>
+            <NotificationBell />
           </div>
-          <div className="text-xs text-gray-700 mt-3">Gharpayy - ARENA OS</div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Navigation Control</div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
           <nav className="px-3 py-4">
             <div className="space-y-1">
               {flatItems.map(item => {
-                const active = isActive(item.href);
+                const active = isActive(item.href, (item as any).exact);
                 const badge = getBadge(item.href);
                 return (
                   <button
                     key={item.href}
                     onClick={() => router.push(item.href)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition border-l-2"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200 group relative"
                     style={{
-                      borderLeftColor: active ? '#f97316' : 'transparent',
                       background: active ? '#fff7ed' : 'transparent',
                       color: active ? '#f97316' : '#374151',
                     }}
                   >
-                    <item.icon className="w-4 h-4 flex-shrink-0" style={{ color: active ? '#f97316' : '#6b7280' }} />
-                    <span className="text-sm font-medium flex-1">{item.label}</span>
+                    {active && (
+                      <div className="absolute left-0 top-2 bottom-2 w-1 bg-orange-500 rounded-r-full" />
+                    )}
+                    <item.icon 
+                      className={cn(
+                        "w-4 h-4 flex-shrink-0 transition-colors",
+                        active ? "text-orange-500" : "text-gray-400 group-hover:text-gray-600"
+                      )} 
+                    />
+                    <span className={cn(
+                      "text-sm font-medium flex-1 truncate",
+                      active ? "font-bold" : "font-medium"
+                    )}>
+                      {item.label}
+                    </span>
                     {badge > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">{badge}</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 animate-pulse">{badge}</span>
                     )}
                   </button>
                 );
@@ -147,30 +185,40 @@ export default function AdminSidebar() {
         <div className="p-4 border-t border-gray-200 space-y-3 bg-white pb-8">
           <button
             onClick={() => setIsKudoModalOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition border border-orange-200/50 group"
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition-all border border-orange-200/50 group"
           >
             <div className="w-6 h-6 rounded-lg bg-orange-50 flex items-center justify-center border border-orange-100 group-hover:scale-110 transition-transform">
               <Heart className="w-3 h-3 text-orange-500 fill-orange-500" />
             </div>
             <span>Give a kudo</span>
           </button>
-          {user && (
-            <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+          
+          {user ? (
+            <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 hover:bg-gray-50 transition-colors cursor-default">
+              <div className="w-9 h-9 rounded-full bg-orange-500 text-white text-[11px] font-black flex items-center justify-center flex-shrink-0 shadow-sm shadow-orange-200 ring-2 ring-white">
                 {initials(user.fullName || user.email)}
               </div>
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-gray-800 truncate">{user.fullName || 'Admin'}</div>
-                <div className="text-[11px] text-gray-700 truncate">{user.email || ''}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-gray-900 truncate">{user.fullName || 'Admin User'}</div>
+                <div className="text-[10px] text-gray-400 font-medium truncate">{user.email || 'gharpayy.com'}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/30 px-3 py-2 animate-pulse">
+              <div className="w-9 h-9 rounded-full bg-gray-200 flex-shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <div className="h-2 w-20 bg-gray-200 rounded" />
+                <div className="h-1.5 w-24 bg-gray-100 rounded" />
               </div>
             </div>
           )}
+          
           <button
             onClick={logout}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-gray-600 hover:bg-gray-100 transition"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all group"
           >
-            <LogOut className="w-4 h-4" />
-            <span className="font-medium">Sign Out</span>
+            <LogOut className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
@@ -182,17 +230,22 @@ export default function AdminSidebar() {
         initialEmployees={employees}
       />
 
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-3">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-[45] bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 h-16 flex items-center">
+        <div className="flex items-center gap-3 w-full">
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-700"
+            className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-700 bg-white shadow-sm active:scale-95 transition-all"
             aria-label="Open menu"
           >
-            <Menu className="w-4 h-4" />
+            <Menu className="w-5 h-5" />
           </button>
-          <img src="/logo.png" alt="Gharpayy" className="w-7 h-7 rounded-lg object-cover" />
-          <div className="text-sm font-semibold text-gray-900">Gharpayy - ARENA OS</div>
+          <img src="/logo.png" alt="Gharpayy" className="w-8 h-8 rounded-xl object-cover shadow-sm" />
+          <div className="flex flex-col">
+            <div className="text-sm font-black text-gray-900 leading-tight">Gharpayy</div>
+            <div className="text-[10px] text-orange-500 font-bold uppercase tracking-wider">Arena OS</div>
+          </div>
+          <div className="flex-1" />
+          <NotificationBell />
         </div>
       </div>
 
@@ -221,7 +274,7 @@ export default function AdminSidebar() {
             <nav className="flex-1 px-3 py-4 overflow-y-auto no-scrollbar">
               <div className="space-y-1">
                 {flatItems.map(item => {
-                  const active = isActive(item.href);
+                  const active = isActive(item.href, (item as any).exact);
                   const badge = getBadge(item.href);
                   return (
                     <button
@@ -230,17 +283,29 @@ export default function AdminSidebar() {
                         router.push(item.href);
                         setMobileMenuOpen(false);
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition border-l-2"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200 group relative"
                       style={{
-                        borderLeftColor: active ? '#f97316' : 'transparent',
                         background: active ? '#fff7ed' : 'transparent',
                         color: active ? '#f97316' : '#374151',
                       }}
                     >
-                      <item.icon className="w-4 h-4 flex-shrink-0" style={{ color: active ? '#f97316' : '#6b7280' }} />
-                      <span className="text-sm font-medium flex-1">{item.label}</span>
+                      {active && (
+                        <div className="absolute left-0 top-2 bottom-2 w-1 bg-orange-500 rounded-r-full" />
+                      )}
+                      <item.icon 
+                        className={cn(
+                          "w-4 h-4 flex-shrink-0 transition-colors",
+                          active ? "text-orange-500" : "text-gray-400 group-hover:text-gray-600"
+                        )} 
+                      />
+                      <span className={cn(
+                        "text-sm font-medium flex-1 truncate",
+                        active ? "font-bold" : "font-medium"
+                      )}>
+                        {item.label}
+                      </span>
                       {badge > 0 && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">{badge}</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 animate-pulse">{badge}</span>
                       )}
                     </button>
                   );
@@ -275,22 +340,30 @@ export default function AdminSidebar() {
         </div>
       )}
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 bg-white border-t border-gray-200" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {flatItems.slice(0, 5).map(item => {
-          const active = isActive(item.href);
+          const active = isActive(item.href, (item as any).exact);
           const badge = getBadge(item.href);
           return (
             <button
               key={item.href}
               onClick={() => router.push(item.href)}
               className="flex flex-col items-center justify-center gap-0.5 py-3 relative"
-              style={{ color: active ? '#f97316' : '#6b7280' }}
+              style={{ color: active ? '#f97316' : '#94a3b8' }}
             >
               {badge > 0 && (
-                <span className="absolute top-1.5 right-3 text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center bg-red-500 text-white">{badge}</span>
+                <span className="absolute top-1.5 right-3 text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center bg-red-500 text-white animate-pulse shadow-sm">{badge}</span>
               )}
-              <item.icon className="w-4 h-4" strokeWidth={active ? 2.2 : 1.8} />
-              <span className="text-[9px] font-medium">{item.label.split(' ')[0]}</span>
+              <item.icon className="w-4 h-4 transition-transform active:scale-90" strokeWidth={active ? 2.5 : 2} />
+              <span className={cn(
+                "text-[9px] transition-all",
+                active ? "font-black uppercase tracking-tighter" : "font-medium"
+              )}>
+                {item.label.split(' ')[0]}
+              </span>
+              {active && (
+                <div className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-orange-500 rounded-b-full" />
+              )}
             </button>
           );
         })}

@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import Tracker from '@/models/Tracker';
 import { getISTDateStr } from '@/lib/attendance-utils';
 import mongoose from 'mongoose';
+import { emitGrowthEvent } from '@/lib/growth-events';
 
 function normalizeText(v: unknown) {
   return typeof v === 'string' ? v.trim() : '';
@@ -117,6 +118,17 @@ export async function POST(req: NextRequest) {
         submissionStatus: submit ? 'submitted' : 'pending',
         completionScore,
       });
+
+      // Growth Engine Integration: Award XP for tracker submission
+      if (submit) {
+        void emitGrowthEvent({
+          userId: auth.id,
+          event: 'EOD_REPORT_SHIPPED',
+          sourceId: created._id.toString(),
+          sourceType: 'tracker'
+        });
+      }
+
       return NextResponse.json({ ok: true, tracker: created });
     }
 
@@ -155,6 +167,16 @@ export async function POST(req: NextRequest) {
       existing.completionScore = completionScore;
     }
     await existing.save();
+
+    // Growth Engine Integration: Award XP for tracker submission
+    if (submit && !wasSubmitted) {
+      void emitGrowthEvent({
+        userId: auth.id,
+        event: 'EOD_REPORT_SHIPPED',
+        sourceId: existing._id.toString(),
+        sourceType: 'tracker'
+      });
+    }
 
     return NextResponse.json({ ok: true, tracker: existing });
   } catch (e: unknown) {

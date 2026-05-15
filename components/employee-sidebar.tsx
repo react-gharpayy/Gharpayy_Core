@@ -1,21 +1,27 @@
 'use client';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Clock, ClipboardList, ClipboardCheck, Bell, TrendingUp, History, LogOut, Settings, Menu, X, Calendar, Heart, LayoutDashboard, Target, Users } from 'lucide-react';
+import { Clock, ClipboardList, ClipboardCheck, Bell, TrendingUp, History, LogOut, Settings, Menu, X, Calendar, Heart, LayoutDashboard, Target, Users, Lightbulb, Trophy, ShoppingBag } from 'lucide-react';
+import { NotificationBell } from '@/modules/notifications/components/NotificationBell';
 import WorkScheduleModal from '@/components/work-schedule-modal';
 import GiveKudoModal from '@/components/GiveKudoModal';
 import { getCurrentWeekInfo } from '@/lib/week-utils';
 
 const NAV_ITEMS = [
-  { label: 'My Attendance', href: '/home', icon: Clock },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'My Attendance', href: '/attendance', icon: Clock },
   { label: 'Arena Console', href: '/arena', icon: Target },
   { label: 'Daily Updates', href: '/tracker', icon: ClipboardList },
   { label: 'My Leaves', href: '/my-leaves', icon: Calendar },
   { label: 'My Tasks', href: '/my-tasks', icon: ClipboardList },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },
   { label: 'Performance Analytics', href: '/my-performance', icon: TrendingUp },
+  { label: '1:1 Sessions', href: '/coaching', icon: Lightbulb },
   { label: 'Kudos', href: '/kudos', icon: Heart },
   { label: 'My History', href: '/my-history', icon: History },
+  { label: 'Growth Missions', href: '/growth/quests', icon: Target },
+  { label: 'Leaderboard', href: '/growth/leaderboard', icon: Trophy },
+  { label: 'Reward Shop', href: '/growth/shop', icon: ShoppingBag },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -51,13 +57,6 @@ export default function EmployeeSidebar() {
         if (d.id || d.email) setUser(d);
       })
       .catch(() => {});
-    
-    fetch('/api/kudos/employees')
-      .then(r => r.json())
-      .then(d => {
-        if (d.employees) setEmployees(d.employees);
-      })
-      .catch(() => {});
   }, []);
 
   const logout = async () => {
@@ -70,19 +69,28 @@ export default function EmployeeSidebar() {
     <>
       <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 z-40 bg-white border-r border-gray-200 overflow-hidden">
         <div className="px-5 py-5 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-orange-500">A</div>
-            <div>
-              <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
-              <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-orange-500">A</div>
+              <div>
+                <div className="text-sm font-bold text-gray-900 leading-tight">Gharpayy</div>
+                <div className="text-[11px] text-orange-500 font-semibold">ARENA OS</div>
+              </div>
             </div>
+            <NotificationBell />
           </div>
-          <div className="text-xs text-gray-700 mt-3">Gharpayy - ARENA OS</div>
+          <div className="text-xs text-gray-700">Gharpayy - ARENA OS</div>
         </div>
 
         <nav className="flex-1 px-3 py-4 overflow-y-auto no-scrollbar">
           <div className="space-y-1">
-            {(user?.role === 'hr' ? HR_NAV_ITEMS : NAV_ITEMS).map(item => {
+            {(user?.role === 'hr' ? HR_NAV_ITEMS : NAV_ITEMS)
+              .filter(item => {
+                const isGrowth = ['/growth/quests', '/growth/leaderboard', '/growth/shop'].includes(item.href);
+                if (!isGrowth) return true;
+                return user?.growthEngineEnabled || process.env.NEXT_PUBLIC_ENABLE_GROWTH_ENGINE === 'true';
+              })
+              .map(item => {
               const active = isActive(item.href);
               const isNotice = item.href === '/notices';
               return (
@@ -157,6 +165,7 @@ export default function EmployeeSidebar() {
             <div className="text-sm font-semibold text-gray-900">Gharpayy - ARENA OS</div>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <button
               onClick={logout}
               className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-orange-500 border border-gray-200 rounded-lg px-2.5 py-1.5 transition"
@@ -176,9 +185,15 @@ export default function EmployeeSidebar() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="md:hidden fixed top-[57px] left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-          {(user?.role === 'hr' ? HR_NAV_ITEMS : NAV_ITEMS).map(item => {
-            const active = isActive(item.href);
+        <div className="md:hidden fixed top-[57px] left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm max-h-[70vh] overflow-y-auto">
+          {(user?.role === 'hr' ? HR_NAV_ITEMS : NAV_ITEMS)
+            .filter(item => {
+              const isGrowth = ['/growth/quests', '/growth/leaderboard', '/growth/shop'].includes(item.href);
+              if (!isGrowth) return true;
+              return user?.growthEngineEnabled || process.env.NEXT_PUBLIC_ENABLE_GROWTH_ENGINE === 'true';
+            })
+            .map(item => {
+              const active = isActive(item.href);
             return (
               <button
                 key={item.href}

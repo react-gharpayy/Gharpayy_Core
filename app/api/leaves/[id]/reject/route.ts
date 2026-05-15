@@ -4,6 +4,7 @@ import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import Leave from '@/models/Leave';
 import User from '@/models/User';
+import { NotificationService } from '@/modules/notifications/notification.service';
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -24,6 +25,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     leave.rejectedBy = auth.id;
     leave.rejectedReason = reason || '';
     await leave.save();
+
+    // Notify employee
+    await NotificationService.createNotification({
+      userId: String(leave.employeeId),
+      type: 'LEAVE_STATUS',
+      title: 'Leave Rejected',
+      message: `Your leave request for ${leave.startDate} has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
+      link: '/my-leaves',
+      metadata: { leaveId: leave._id }
+    });
 
     return NextResponse.json({ ok: true, leave });
   } catch (e: unknown) {

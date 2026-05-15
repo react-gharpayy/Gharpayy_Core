@@ -1,6 +1,8 @@
-﻿import type { Metadata } from 'next'
+import type { Metadata } from 'next'
 import { DM_Sans } from 'next/font/google'
 import './globals.css'
+import { NotificationProvider } from '@/modules/notifications/store/NotificationContext'
+import { Toaster } from 'sonner'
 
 const dmSans = DM_Sans({ subsets: ['latin'] });
 
@@ -17,7 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${dmSans.className} antialiased`}>
-        {children}
+        <NotificationProvider>
+          {children}
+        </NotificationProvider>
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );

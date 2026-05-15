@@ -6,10 +6,12 @@ import WeeklyTrackerSettings from '@/components/daily-tracker-settings';
 import CrmIntegrationSettings from '@/components/crm-integration-settings';
 import ShiftSettings from '@/components/shift-settings';
 import AttendancePolicySettings from '@/components/attendance-policy-settings';
+import OrgEntityManager from '@/components/org-entity-manager';
 
 const TABS = [
-  { key: 'general', label: 'General' },
-  { key: 'shifts', label: 'Shifts' },
+  { key: 'general',      label: 'General' },
+  { key: 'organization', label: 'Organization' },
+  { key: 'shifts',       label: 'Shifts' },
   { key: 'attendance-policy', label: 'Attendance Policy' },
   { key: 'notifications', label: 'Notifications' },
 ] as const;
@@ -57,6 +59,17 @@ export default function AdminSettingsTabs({ initialTab }: { initialTab?: string 
             <WorkScheduleSettings />
             <WeeklyTrackerSettings />
             <CrmIntegrationSettings />
+          </div>
+        )}
+
+        {activeTab === 'organization' && (
+          <div className="space-y-4">
+            <OrgEntityManager
+              entityType="team"
+              apiPath="/api/teams"
+              label="Team"
+              examples={['KORA CORE', 'HOMES Kora', 'Engineering', 'Sales', 'Operations']}
+            />
           </div>
         )}
 

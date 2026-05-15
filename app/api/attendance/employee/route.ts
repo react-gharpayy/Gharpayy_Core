@@ -110,7 +110,8 @@ export async function GET(req: NextRequest) {
     const presentDays = monthRows.filter((r: any) => r.dayStatus !== 'Absent').length;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const totalWorkMins30 = monthRows.reduce((s: number, r: any) => s + Number(r.totalWorkMins || 0), 0);
-    const avgWorkMins     = monthRows.length ? Math.round(totalWorkMins30 / monthRows.length) : 0;
+    // Average over PRESENT days only — absent days have 0 work mins and would deflate/inflate the average
+    const avgWorkMins = presentDays > 0 ? Math.round(totalWorkMins30 / presentDays) : 0;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const hourlyDist = monthRows.reduce((acc: Record<string, number>, r: any) => {

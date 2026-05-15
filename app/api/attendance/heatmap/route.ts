@@ -58,37 +58,20 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
-    const week   = searchParams.get('week');
-    const date   = searchParams.get('date');
-    const teamId = searchParams.get('team');
+    const week      = searchParams.get('week');
+    const date      = searchParams.get('date');
+    const teamId    = searchParams.get('teamId') || searchParams.get('team'); // legacy support
+    const zoneId    = searchParams.get('zoneId') || searchParams.get('zone');
     const managerId = searchParams.get('manager');
     const statusFilter = searchParams.get('status');
-    const dateFrom = searchParams.get('dateFrom');
-    const dateTo = searchParams.get('dateTo');
+    const dateFrom  = searchParams.get('dateFrom');
+    const dateTo    = searchParams.get('dateTo');
 
     await connectDB();
 
     const isManager = ['admin', 'manager', 'hr'].includes(user.role);
-    const todayStr  = getTodayIST();
+    const todayStr  = getISTDateStr();
     const logDate   = date || todayStr;
-
-    // Get week off day + shift rules from DB
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const zone = await OfficeZone.findOne({}).lean() as any;
-    const baseRules = await getShiftRules();
-    const weekOffDay   = zone?.weekOffDay || 'Tuesday';
-    const weekOffLabel = WEEK_OFF_LABEL[weekOffDay] || 'Tue';
-
-    const shiftInfo = {
-      earlyBefore:  baseRules.shiftStart,
-      onTimeTill:   `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
-      lateAfter:    `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
-      shiftStart: baseRules.shiftStart,
-      shiftEnd: baseRules.shiftEnd,
-      graceMinutes: baseRules.graceMinutes,
-      weekOffDay,
-      weekOffLabel,
-    };
 
     // Determine date range
     let dates: string[] = [];
@@ -102,35 +85,79 @@ export async function GET(req: NextRequest) {
           d.setDate(d.getDate() + 1);
         }
       }
-    } else if (date)      dates = [date];
+    } else if (date) dates = [date];
     else if (week) dates = getWeekDatesFromStr(week);
 
     if (isManager) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userQuery: any = {};
       if (user.role !== 'manager') {
-        if (teamId) userQuery.officeZoneId = teamId;
+        if (zoneId) userQuery.officeZoneId = zoneId;
+        if (teamId) userQuery.teamId = teamId;
         if (managerId) userQuery.managerId = managerId;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const users = await User.find(userQuery, 'fullName email role playbookRole officeZoneId isApproved workSchedule')
-        .select('-profilePhoto')
-        .populate('officeZoneId', 'name')
-        .lean() as any[];
+      // 1. Initial parallel fetch for core data
+      const [users, baseRules, zone] = await Promise.all([
+        User.find(userQuery, 'fullName email role playbookRole officeZoneId teamId teamName isApproved workSchedule')
+          .select('-profilePhoto')
+          .populate('officeZoneId', 'name')
+          .populate('teamId', 'name')
+          .lean() as any,
+        getShiftRules(),
+        OfficeZone.findOne({}).lean() as any,
+      ]);
 
-      const employeeIds = users.map(u => u._id.toString());
+      const employeeIds = users.map((u: any) => u._id.toString());
+      const weekOffDay   = zone?.weekOffDay || 'Tuesday';
+      const weekOffLabel = WEEK_OFF_LABEL[weekOffDay] || 'Tue';
+
+      const shiftInfo = {
+        earlyBefore:  baseRules.shiftStart,
+        onTimeTill:   `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+        lateAfter:    `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+        shiftStart: baseRules.shiftStart,
+        shiftEnd: baseRules.shiftEnd,
+        graceMinutes: baseRules.graceMinutes,
+        weekOffDay,
+        weekOffLabel,
+      };
+
+
+      // 7-day trend range
+      const trendDates: string[] = [];
+      const cursor = new Date(logDate);
+      cursor.setDate(cursor.getDate() - 6);
+      for (let i = 0; i < 7; i++) {
+        trendDates.push(new Date(cursor).toISOString().split('T')[0]);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      const yesterday = new Date(logDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yDate = yesterday.toISOString().split('T')[0];
+
+      // 2. Parallel fetch for all attendance data slices
+      const [allAtt, logAtt, yAtt, trendAtt] = await Promise.all([
+        dates.length > 0 ? Attendance.find({ employeeId: { $in: employeeIds }, date: { $in: dates } }, 'employeeId date dayStatus').lean() : Promise.resolve([]),
+        Attendance.find({ employeeId: { $in: employeeIds }, date: logDate }).lean(),
+        Attendance.find({ employeeId: { $in: employeeIds }, date: yDate }, 'dayStatus').lean(),
+        Attendance.find({ employeeId: { $in: employeeIds }, date: { $in: trendDates } }, 'date dayStatus').lean()
+      ]);
+
+      // Optimization: Index attendance by employeeId for O(1) access
+      const allAttMap = new Map();
+      allAtt.forEach((a: any) => {
+        const eid = a.employeeId.toString();
+        if (!allAttMap.has(eid)) allAttMap.set(eid, []);
+        allAttMap.get(eid).push(a);
+      });
+
+      const logAttMap = new Map((logAtt as any[]).map(a => [a.employeeId.toString(), a]));
 
       // Heatmap attendance
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const attQuery: any = { employeeId: { $in: employeeIds } };
-      if (dates.length > 0) attQuery.date = { $in: dates };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const allAtt = await Attendance.find(attQuery).lean() as any[];
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const heatmap = users.map((u: any) => {
-        const empAtt = allAtt.filter(a => a.employeeId.toString() === u._id.toString());
+        const empAtt = allAttMap.get(u._id.toString()) || [];
         const days: Record<string, string> = {};
         for (const a of empAtt) days[a.date] = a.dayStatus;
         return {
@@ -146,16 +173,10 @@ export async function GET(req: NextRequest) {
 
       // Selected date log
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const logAtt = await Attendance.find({
-        employeeId: { $in: employeeIds },
-        date: logDate,
-      }).lean() as any[];
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let todayLog = users
         .map((u: any) => {
-          const att       = logAtt.find(a => a.employeeId.toString() === u._id.toString());
-          const firstSess = att?.sessions?.[0];
+          const att       = logAttMap.get(u._id.toString());
+          const firstSess = att?.sessions?.find((s: any) => (s?.type || 'work') !== 'break');
           const rules = applyUserSchedule(baseRules, u.workSchedule);
           const derived = att ? deriveStatusFromAttendance(att, rules) : { dayStatus: 'Absent', lateByMins: 0, earlyByMins: 0 };
           return {
@@ -174,55 +195,36 @@ export async function GET(req: NextRequest) {
             earlyByMins:   derived.earlyByMins || 0,
           };
         })
-        .sort((a, b) => statusSortOrder(a.dayStatus) - statusSortOrder(b.dayStatus));
+        .sort((a: any, b: any) => statusSortOrder(a.dayStatus) - statusSortOrder(b.dayStatus));
 
       if (statusFilter && statusFilter !== 'all') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         todayLog = todayLog.filter((e: any) => e.dayStatus === statusFilter || e.workMode === statusFilter);
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const present = todayLog.filter((e: any) => e.dayStatus !== 'Absent').length;
-
-      const yesterday = new Date(logDate);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yDate = yesterday.toISOString().split('T')[0];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const yAtt = await Attendance.find({ employeeId: { $in: employeeIds }, date: yDate }).lean() as any[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const yPresent = yAtt.filter((a: any) => (a.dayStatus || 'Absent') !== 'Absent').length;
 
-      // 7-day trend and team comparison
-      const trendDates: string[] = [];
-      const cursor = new Date(logDate);
-      cursor.setDate(cursor.getDate() - 6);
-      for (let i = 0; i < 7; i++) {
-        trendDates.push(new Date(cursor).toISOString().split('T')[0]);
-        cursor.setDate(cursor.getDate() + 1);
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const trendAtt = await Attendance.find({ employeeId: { $in: employeeIds }, date: { $in: trendDates } }).lean() as any[];
-      const lateTrend = trendDates.map(d => ({
+      const lateTrend = trendDates.map((d: string) => ({
         date: d,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         late: trendAtt.filter((a: any) => a.date === d && a.dayStatus === 'Late').length,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         present: trendAtt.filter((a: any) => a.date === d && a.dayStatus !== 'Absent').length,
       }));
+
       const teamComparison = Object.values(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         users.reduce((acc: any, u: any) => {
           const team = String((u.officeZoneId as Record<string, unknown>)?.name || 'No Zone');
           if (!acc[team]) acc[team] = { team, total: 0, present: 0, late: 0 };
           acc[team].total += 1;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const a = logAtt.find((x: any) => x.employeeId.toString() === u._id.toString());
+          const a = logAttMap.get(u._id.toString());
           const status = a?.dayStatus || 'Absent';
           if (status !== 'Absent') acc[team].present += 1;
           if (status === 'Late') acc[team].late += 1;
           return acc;
         }, {})
       );
+
 
       return NextResponse.json({
         heatmap,
@@ -238,14 +240,28 @@ export async function GET(req: NextRequest) {
 
     } else {
       // Employee - own data only
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const attQuery: any = { employeeId: user.id };
-      if (dates.length > 0) attQuery.date = { $in: dates };
+      const [empAtt, baseRules, zone] = await Promise.all([
+        Attendance.find({ employeeId: user.id, date: { $in: dates } }).lean() as any,
+        getShiftRules(),
+        OfficeZone.findOne({}).lean() as any,
+      ]);
+      const weekOffDay   = zone?.weekOffDay || 'Tuesday';
+      const weekOffLabel = WEEK_OFF_LABEL[weekOffDay] || 'Tue';
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const empAtt = await Attendance.find(attQuery).lean() as any[];
+      const shiftInfo = {
+        earlyBefore:  baseRules.shiftStart,
+        onTimeTill:   `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+        lateAfter:    `${baseRules.shiftStart} + ${baseRules.graceMinutes}m`,
+        shiftStart: baseRules.shiftStart,
+        shiftEnd: baseRules.shiftEnd,
+        graceMinutes: baseRules.graceMinutes,
+        weekOffDay,
+        weekOffLabel,
+      };
+
       const days: Record<string, string> = {};
       for (const a of empAtt) days[a.date] = a.dayStatus;
+
 
       return NextResponse.json({
         heatmap: [{ employeeId: user.id, employeeName: user.fullName, days }],

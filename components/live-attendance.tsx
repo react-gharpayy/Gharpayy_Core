@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Filter, RefreshCw, ChevronRight, X, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 
 interface Employee {
@@ -163,9 +163,10 @@ export default function LiveAttendance() {
   const [playbookRoles, setPlaybookRoles] = useState<any[]>([]);
   // Cache loaded selfies so we don't re-fetch on re-render: key = "employeeId-sessionIndex-date"
   const selfieCache = useRef<Record<string, string>>({});
+  const fetchDataRef = useRef<any>(null);
 
   const fetchData = useCallback((date = selectedDate, zone = selectedZone, manager = selectedManager, status = statusFilter, from = dateFrom, to = dateTo, useRange = rangeMode) => {
-    setLoading(true);
+    if (all.length === 0) setLoading(true);
     const params = new URLSearchParams();
     if (useRange && from && to) {
       params.set('dateFrom', from);
@@ -195,11 +196,15 @@ export default function LiveAttendance() {
         if (d.lateTrend) setLateTrend(d.lateTrend);
         if (d.teamComparison) setTeamComparison(d.teamComparison);
       })
-      .catch(() => {}).finally(() => setLoading(false));
-  }, [selectedDate, selectedZone, selectedManager, statusFilter, dateFrom, dateTo, rangeMode]);
+      .catch(err => console.error('[LiveAttendance] Fetch failed:', err))
+      .finally(() => setLoading(false));
+  }, [selectedDate, selectedZone, selectedManager, statusFilter, dateFrom, dateTo, rangeMode, all.length]);
+
+  // Keep the ref in sync
+  useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
 
   const fetchBreakReport = useCallback((mode = breakMode) => {
-    setBreakLoading(true);
+    if (breakRows.length === 0 && breakWeekly.length === 0) setBreakLoading(true);
     const params = new URLSearchParams();
     params.set('mode', mode);
     params.set('date', selectedDate);
@@ -212,29 +217,63 @@ export default function LiveAttendance() {
     fetch(`/api/attendance/break-report?${params.toString()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
-        if (d.ok) {
-          setBreakRows(d.dailyRows || []);
-          setBreakWeekly(d.weeklySummary || []);
+        if (d.success || d.ok) {
+          // Robust parsing of data fields
+          setBreakRows(d.data?.dailyRows || d.dailyRows || []);
+          setBreakWeekly(d.data?.weeklySummary || d.weeklySummary || []);
         }
       })
-      .catch(() => {})
+      .catch(err => console.error('[LiveAttendance] Break report fetch failed:', err))
       .finally(() => setBreakLoading(false));
   }, [breakMode, selectedDate, dateFrom, dateTo, selectedZone, selectedManager]);
 
   useEffect(() => {
-    fetchData();
-    fetch('/api/zones').then(r => r.json()).then(d => { if (d.zones) setZones(d.zones); }).catch(() => {});
-    fetch('/api/org').then(r => r.json()).then(d => { if (d.availableManagers) setManagers(d.availableManagers); }).catch(() => {});
-    fetch('/api/attendance/rules').then(r => r.json()).then(d => {
-      if (d?.rules) setRulesForm({
-        shiftStart: d.rules.shiftStart || '10:00',
-        shiftEnd: d.rules.shiftEnd || '19:00',
-        graceMinutes: Number(d.rules.graceMinutes || 15),
-      });
-    }).catch(() => {});
-    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.role) setUserRole(d.role); }).catch(() => {});
-    fetch('/api/arena/roles').then(r => r.json()).then(d => { if (d?.roles) setPlaybookRoles(d.roles); }).catch(() => {});
-    const interval = setInterval(() => fetchData(), 60000);
+    setLoading(true);
+    
+    // Parallelize all initial metadata fetches to reduce waterfalls and re-renders
+    Promise.all([
+      fetch('/api/attendance/heatmap?date=' + selectedDate, { cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/zones').then(r => r.json()),
+      fetch('/api/org').then(r => r.json()),
+      fetch('/api/attendance/rules').then(r => r.json()),
+      fetch('/api/auth/me').then(r => r.json()),
+      fetch('/api/arena/roles').then(r => r.json())
+    ]).then(([dAtt, dZones, dOrg, dRules, dAuth, dRoles]) => {
+      // 1. Attendance Data
+      if (dAtt.todayLog) {
+        const sorted = [...dAtt.todayLog].sort((a: any, b: any) => {
+          const sd = (STATUS_ORDER[a.dayStatus] ?? 3) - (STATUS_ORDER[b.dayStatus] ?? 3);
+          if (sd !== 0) return sd;
+          if (!a.checkInTime) return 1; if (!b.checkInTime) return -1;
+          return a.checkInTime.localeCompare(b.checkInTime);
+        });
+        setAll(sorted); setEmployees(sorted);
+      }
+      if (dAtt.present !== undefined) setPresent(dAtt.present);
+      if (dAtt.total !== undefined) setTotal(dAtt.total);
+      if (dAtt.shiftInfo) setShiftInfo(dAtt.shiftInfo);
+      if (dAtt.lateTrend) setLateTrend(dAtt.lateTrend);
+      if (dAtt.teamComparison) setTeamComparison(dAtt.teamComparison);
+
+      // 2. Metadata
+      if (dZones.zones) setZones(dZones.zones);
+      if (dOrg.availableManagers) setManagers(dOrg.availableManagers);
+      if (dRules?.rules) {
+        setRulesForm({
+          shiftStart: dRules.rules.shiftStart || '10:00',
+          shiftEnd: dRules.rules.shiftEnd || '19:00',
+          graceMinutes: Number(dRules.rules.graceMinutes || 15),
+        });
+      }
+      if (dAuth?.role) setUserRole(dAuth.role);
+      if (dRoles?.roles) setPlaybookRoles(dRoles.roles);
+    })
+    .catch(err => console.error('[LiveAttendance] Init failed:', err))
+    .finally(() => setLoading(false));
+
+    const interval = setInterval(() => {
+      if (fetchDataRef.current) fetchDataRef.current();
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -252,11 +291,18 @@ export default function LiveAttendance() {
     setSavingRules(false);
   };
 
-  useEffect(() => {
-    if (filter === 'All') { setEmployees(all); return; }
-    if (filter === 'Present') setEmployees(all.filter(e => e.workMode === 'Present' || (e.isCheckedIn && !e.workMode)));
-    else setEmployees(all.filter(e => e.workMode === filter || e.dayStatus === filter));
+  // Memoize the filtered list to avoid O(N) filtering on every render
+  const filteredEmployees = useMemo(() => {
+    if (filter === 'All') return all;
+    if (filter === 'Present') return all.filter((e: Employee) => e.workMode === 'Present' || (e.isCheckedIn && !e.workMode));
+    return all.filter((e: Employee) => e.workMode === filter || e.dayStatus === filter);
   }, [filter, all]);
+
+  // Staged rendering state: load only first 50 then more to prevent blocking
+  const [visibleCount, setVisibleCount] = useState(50);
+  useEffect(() => { setVisibleCount(50); }, [filter, all]);
+
+  const visibleEmployees = useMemo(() => filteredEmployees.slice(0, visibleCount), [filteredEmployees, visibleCount]);
 
   useEffect(() => {
     fetchBreakReport();
@@ -297,6 +343,22 @@ export default function LiveAttendance() {
       setSelfieModal(null);
     }
   };
+
+  // Break Report Stats Calculation
+  const breakStats = useMemo(() => {
+    const rows = breakMode === 'weekly' ? breakWeekly : breakRows;
+    if (!rows.length) return { total: 0, max: 0, avg: 0, count: 0 };
+    
+    const count = new Set(rows.map(r => r.employeeId)).size;
+    const totals = rows.map(r => r.totalBreakMins || 0);
+    const sum = totals.reduce((a, b) => a + b, 0);
+    return {
+      total: sum,
+      max: Math.max(...totals),
+      avg: Math.round(sum / Math.max(rows.length, 1)),
+      count
+    };
+  }, [breakRows, breakWeekly, breakMode]);
 
   const card = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 20, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' };
   const today = getTodayIST();
@@ -463,7 +525,7 @@ export default function LiveAttendance() {
 
       {/* Employee List */}
       <div style={card} className="overflow-hidden">
-        {loading ? (
+        {(loading && all.length === 0) ? (
           <div className="p-4 space-y-2 animate-pulse">
             {[1,2,3,4,5].map(i => <div key={i} className="h-14 rounded-xl" style={{ background: '#f9fafb' }}/>)}
           </div>
@@ -471,7 +533,7 @@ export default function LiveAttendance() {
           <div className="p-12 text-center text-sm" style={{ color: '#6b7280' }}>No records found</div>
         ) : (
           <div className="divide-y" style={{ borderColor: '#f9fafb' }}>
-            {employees.map(emp => {
+            {visibleEmployees.map((emp: Employee) => {
               const mode = emp.workMode || (emp.isCheckedIn ? 'Present' : 'Absent');
               const mc = WORK_MODE_COLOR[mode] || WORK_MODE_COLOR.Absent;
               const [bg, fg] = avColor(emp.employeeName);
@@ -503,6 +565,14 @@ export default function LiveAttendance() {
                 </button>
               );
             })}
+            {filteredEmployees.length > visibleCount && (
+              <button
+                onClick={() => setVisibleCount(p => p + 100)}
+                className="w-full py-4 text-xs font-bold text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all border-t border-gray-50"
+              >
+                Show More (+{filteredEmployees.length - visibleCount} remaining)
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -533,15 +603,63 @@ export default function LiveAttendance() {
             </button>
           ))}
         </div>
-        {breakLoading ? (
-          <div className="text-xs text-gray-500">Loading break data...</div>
+
+        {/* Date Range Picker UI */}
+        {breakMode === 'range' && (
+          <div className="grid grid-cols-3 gap-2 mb-4 p-3 rounded-2xl bg-orange-50/50 border border-orange-100">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-orange-700 uppercase px-1">From</label>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl text-xs border border-orange-200 focus:outline-none focus:ring-1 focus:ring-orange-400" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-orange-700 uppercase px-1">To</label>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl text-xs border border-orange-200 focus:outline-none focus:ring-1 focus:ring-orange-400" />
+            </div>
+            <div className="flex items-end">
+              <button 
+                onClick={() => fetchBreakReport('range')}
+                disabled={!dateFrom || !dateTo || dateFrom > dateTo}
+                className="w-full py-2 rounded-xl text-xs font-bold bg-orange-500 text-white disabled:opacity-50 transition-all hover:bg-orange-600 shadow-sm"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Summary Stats Cards */}
+        {!breakLoading && (breakRows.length > 0 || breakWeekly.length > 0) && (
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+              <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Analyzed</div>
+              <div className="text-lg font-black text-gray-900">{breakStats.count} <span className="text-[10px] font-normal text-gray-400">Emps</span></div>
+            </div>
+            <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+              <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Highest</div>
+              <div className="text-lg font-black text-orange-600">{breakStats.max}m</div>
+            </div>
+            <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+              <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Average</div>
+              <div className="text-lg font-black text-blue-600">{breakStats.avg}m</div>
+            </div>
+          </div>
+        )}
+
+        {(breakLoading && breakRows.length === 0 && breakWeekly.length === 0) ? (
+          <div className="space-y-2 animate-pulse">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 rounded-xl bg-gray-50 border border-gray-100" />
+            ))}
+          </div>
         ) : breakMode === 'weekly' ? (
           breakWeekly.length === 0 ? (
             <div className="text-xs text-gray-500">No records for this week.</div>
           ) : (
             <div className="space-y-2">
               {[...breakWeekly]
-                .sort((a, b) => (b.totalBreakMins || 0) - (a.totalBreakMins || 0))
+                .sort((a: any, b: any) => (b.totalBreakMins || 0) - (a.totalBreakMins || 0))
                 .map((emp: any) => (
                   <div key={`break-week-${emp.employeeId}`} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50 text-xs">
                     <div>
@@ -550,7 +668,7 @@ export default function LiveAttendance() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-gray-900">{emp.totalBreakMins || 0}m</div>
-                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work {emp.totalWorkMins || 0}m</div>
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work Hours {emp.totalWorkMins || 0}m</div>
                     </div>
                   </div>
                 ))}
@@ -562,7 +680,7 @@ export default function LiveAttendance() {
           ) : (
             <div className="space-y-2">
               {[...breakRows]
-                .sort((a, b) => (a.date === b.date ? (b.totalBreakMins || 0) - (a.totalBreakMins || 0) : b.date.localeCompare(a.date)))
+                .sort((a: any, b: any) => (a.date === b.date ? (b.totalBreakMins || 0) - (a.totalBreakMins || 0) : b.date.localeCompare(a.date)))
                 .map((emp: any, idx: number) => (
                   <div key={`break-${emp.employeeId}-${emp.date}-${idx}`} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50 text-xs">
                     <div>
@@ -571,7 +689,7 @@ export default function LiveAttendance() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold text-gray-900">{emp.totalBreakMins || 0}m</div>
-                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work {emp.totalWorkMins || 0}m</div>
+                      <div className="text-[10px]" style={{ color: '#6b7280' }}>Work Hours {emp.totalWorkMins || 0}m</div>
                     </div>
                   </div>
                 ))}

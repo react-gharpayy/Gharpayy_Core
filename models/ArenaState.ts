@@ -1,9 +1,18 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-// 1. KPI Definition - Admin defined
+// ─── Architecture note ────────────────────────────────────────────────────────
+// KPIs and Sprint Plans are owned by TEAMS (HR Team, Recruitment Team, etc.)
+// NOT by hierarchy roles (Manager, Employee) or playbook roles (recruiter, coach).
+//
+// teamName = operational grouping → owns KPIs, sprints, Arena dashboards
+// hierarchyRole = authority level → owns permissions, reporting, approvals
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 1. KPI Definition — owned by a Team
 export interface IArenaKPIDefinition extends Document {
-  role: string;
-  kpiName: string; // internal key
+  /** The team that owns this KPI, e.g. "HR Team", "Recruitment Team" */
+  teamName: string;
+  kpiName: string;
   label: string;
   type: 'NUMBER' | 'BOOLEAN';
   target: any;
@@ -12,29 +21,30 @@ export interface IArenaKPIDefinition extends Document {
 }
 
 const ArenaKPIDefinitionSchema = new Schema({
-  role: { type: String, required: true },
-  kpiName: { type: String, required: true },
-  label: { type: String, required: true },
-  type: { type: String, enum: ['NUMBER', 'BOOLEAN'], default: 'NUMBER' },
-  target: { type: Schema.Types.Mixed, default: 0 },
+  teamName:   { type: String, required: true },
+  kpiName:    { type: String, required: true },
+  label:      { type: String, required: true },
+  type:       { type: String, enum: ['NUMBER', 'BOOLEAN'], default: 'NUMBER' },
+  target:     { type: Schema.Types.Mixed, default: 0 },
   orderIndex: { type: Number, default: 0 },
-  isActive: { type: Boolean, default: true },
+  isActive:   { type: Boolean, default: true },
 });
 
-// 2. Sprint Plan - Admin defined
+// 2. Sprint Plan — owned by a Team
 export interface IArenaSprintPlan extends Document {
-  role: string;
+  /** The team that owns this sprint plan */
+  teamName: string;
   sprintName: string;
-  startTime: string; // e.g. "10:00"
-  endTime: string;   // e.g. "11:00"
+  startTime: string;
+  endTime: string;
   orderIndex: number;
 }
 
 const ArenaSprintPlanSchema = new Schema({
-  role: { type: String, required: true },
+  teamName:   { type: String, required: true },
   sprintName: { type: String, required: true },
-  startTime: { type: String, required: true },
-  endTime: { type: String, required: true },
+  startTime:  { type: String, required: true },
+  endTime:    { type: String, required: true },
   orderIndex: { type: Number, default: 0 },
 });
 
@@ -126,15 +136,18 @@ const ArenaDailyStateSchema = new Schema({
 
 // Indexes for fast lookup
 ArenaDailyStateSchema.index({ userId: 1, date: 1 }, { unique: true });
-ArenaKPIDefinitionSchema.index({ role: 1, kpiName: 1 }, { unique: true });
+ArenaKPIDefinitionSchema.index({ teamName: 1, kpiName: 1 }, { unique: true });
+ArenaSprintPlanSchema.index({ teamName: 1, sprintName: 1 });
 
-// Clear cached models for HMR
-delete mongoose.models.ArenaKPIDefinition;
-delete mongoose.models.ArenaSprintPlan;
-delete mongoose.models.ArenaCommWindow;
-delete mongoose.models.ArenaDailyState;
+// Export models with defensive registration and explicit collection names
+export const ArenaKPIDefinition = mongoose.models?.ArenaKPIDefinition || 
+  mongoose.model<IArenaKPIDefinition>('ArenaKPIDefinition', ArenaKPIDefinitionSchema, 'arenakpidefinitions');
 
-export const ArenaKPIDefinition = mongoose.model<IArenaKPIDefinition>('ArenaKPIDefinition', ArenaKPIDefinitionSchema);
-export const ArenaSprintPlan = mongoose.model<IArenaSprintPlan>('ArenaSprintPlan', ArenaSprintPlanSchema);
-export const ArenaCommWindow = mongoose.model<IArenaCommWindow>('ArenaCommWindow', ArenaCommWindowSchema);
-export const ArenaDailyState = mongoose.model<IArenaDailyState>('ArenaDailyState', ArenaDailyStateSchema);
+export const ArenaSprintPlan = mongoose.models?.ArenaSprintPlan || 
+  mongoose.model<IArenaSprintPlan>('ArenaSprintPlan', ArenaSprintPlanSchema, 'arenasprintplans');
+
+export const ArenaCommWindow = mongoose.models?.ArenaCommWindow || 
+  mongoose.model<IArenaCommWindow>('ArenaCommWindow', ArenaCommWindowSchema, 'arenacommwindows');
+
+export const ArenaDailyState = mongoose.models?.ArenaDailyState || 
+  mongoose.model<IArenaDailyState>('ArenaDailyState', ArenaDailyStateSchema, 'arenadailystates');

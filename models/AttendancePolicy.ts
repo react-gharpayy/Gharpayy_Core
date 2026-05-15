@@ -1,26 +1,42 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IAttendancePolicy extends Document {
-  orgId: mongoose.Types.ObjectId;
+  name: string;
+  orgId?: mongoose.Types.ObjectId;
+  isDefault: boolean;
 
   // Late arrival
-  lateGraceMinutes: number;
+  graceMinutes: number;
   lateMarkAfterMinutes: number;
   halfDayThresholdMinutes: number;
   absentThresholdMinutes: number;
-  lateDeductionEnabled: boolean;
-  lateDeductionPerIncident: number;
+  latePenaltyEnabled: boolean;
+  latePenaltyType: 'fixed' | 'per_minute';
+  latePenaltyValue: number;
 
   // Working hours
   standardWorkingHoursPerDay: number;
-  weeklyOffDays: string[];
+  weekOffs: string[];
+  weeklyOffDays: string[]; // alias for weekOffs used in leaves calculation
 
   // Overtime
   overtimeEnabled: boolean;
-  overtimeThresholdMinutes: number;
+  overtimeAfterMinutes: number;
+  compOffEnabled: boolean;
   overtimeMultiplier: number;
   maxOvertimeHoursPerDay: number;
   maxOvertimeHoursPerMonth: number;
+
+  // Exclusions
+  holidayExclusionEnabled: boolean;
+  weeklyOffExclusionEnabled: boolean;
+
+  // Deduction
+  lopDeductionEnabled: boolean;
+
+  // IP Restriction
+  ipRestrictionEnabled: boolean;
+  allowedIPs: string[];
 
   // Auto absent
   autoMarkAbsent: boolean;
@@ -33,26 +49,42 @@ export interface IAttendancePolicy extends Document {
 
 const AttendancePolicySchema = new Schema<IAttendancePolicy>(
   {
-    orgId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    name: { type: String, default: 'Default Policy' },
+    orgId: { type: Schema.Types.ObjectId, ref: 'User', unique: true, sparse: true },
+    isDefault: { type: Boolean, default: false },
 
     // Late arrival
-    lateGraceMinutes: { type: Number, default: 10, min: 0, max: 60 },
+    graceMinutes: { type: Number, default: 10, min: 0, max: 180 },
     lateMarkAfterMinutes: { type: Number, default: 15, min: 0, max: 120 },
     halfDayThresholdMinutes: { type: Number, default: 120, min: 60, max: 300 },
     absentThresholdMinutes: { type: Number, default: 240, min: 120, max: 480 },
-    lateDeductionEnabled: { type: Boolean, default: false },
-    lateDeductionPerIncident: { type: Number, default: 0, min: 0, max: 500 },
+    latePenaltyEnabled: { type: Boolean, default: false },
+    latePenaltyType: { type: String, enum: ['fixed', 'per_minute'], default: 'fixed' },
+    latePenaltyValue: { type: Number, default: 0 },
 
     // Working hours
     standardWorkingHoursPerDay: { type: Number, default: 8, min: 4, max: 12 },
-    weeklyOffDays: { type: [String], default: ['Sun'], enum: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] },
+    weekOffs: { type: [String], default: ['Sunday'] },
+    weeklyOffDays: { type: [String], default: ['Sunday'] }, // alias for weekOffs
 
     // Overtime
     overtimeEnabled: { type: Boolean, default: true },
-    overtimeThresholdMinutes: { type: Number, default: 30, min: 0, max: 120 },
+    overtimeAfterMinutes: { type: Number, default: 30 },
+    compOffEnabled: { type: Boolean, default: false },
     overtimeMultiplier: { type: Number, default: 1.5, min: 1, max: 5 },
     maxOvertimeHoursPerDay: { type: Number, default: 4, min: 0, max: 12 },
     maxOvertimeHoursPerMonth: { type: Number, default: 50, min: 0, max: 100 },
+
+    // Exclusions
+    holidayExclusionEnabled: { type: Boolean, default: true },
+    weeklyOffExclusionEnabled: { type: Boolean, default: true },
+
+    // Deduction
+    lopDeductionEnabled: { type: Boolean, default: false },
+
+    // IP Restriction
+    ipRestrictionEnabled: { type: Boolean, default: false },
+    allowedIPs: { type: [String], default: [] },
 
     // Auto absent
     autoMarkAbsent: { type: Boolean, default: true },

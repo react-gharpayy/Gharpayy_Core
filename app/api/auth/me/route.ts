@@ -24,6 +24,7 @@ export async function GET() {
         workSchedule: null,
         leaves: [],
         createdAt: new Date().toISOString(),
+        growthEngineEnabled: process.env.ENABLE_GROWTH_ENGINE === 'true'
       });
     }
 
@@ -41,8 +42,14 @@ export async function GET() {
       .lean() as any;
 
     if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const growthEngineEnabled = process.env.ENABLE_GROWTH_ENGINE === 'true';
+    console.log('DEBUG: ENABLE_GROWTH_ENGINE =', process.env.ENABLE_GROWTH_ENGINE, 'Result =', growthEngineEnabled);
 
-    return NextResponse.json({ ...dbUser, id: dbUser._id?.toString() });
+    return NextResponse.json({ 
+      ...dbUser, 
+      id: dbUser._id?.toString(),
+      growthEngineEnabled
+    });
   } catch (e: unknown) {
     console.error('API error:', e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

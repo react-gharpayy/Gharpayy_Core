@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
@@ -35,7 +35,7 @@ export default function LoginPage() {
       }
 
       if (data.user?.role === 'admin' || data.user?.role === 'manager') router.push('/');
-      else router.push('/home');
+      else router.push('/dashboard');
     } catch {
       setError('Unable to reach login service. Please restart the app server and try again.');
     } finally {

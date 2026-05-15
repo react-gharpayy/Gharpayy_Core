@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { LogOut, Users } from 'lucide-react';
+import { NotificationBell } from '@/modules/notifications/components/NotificationBell';
 
 export default function Header() {
   const router = useRouter();
@@ -45,11 +46,14 @@ export default function Header() {
             Employees
           </button>
         )}
-        <button onClick={logout}
-          className="flex items-center gap-1.5 text-sm text-gray-700 hover:text-orange-500 transition border border-gray-200 rounded-lg px-3 py-1.5">
-          <LogOut className="w-4 h-4" />
-          Logout
-        </button>
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          <button onClick={logout}
+            className="flex items-center gap-1.5 text-sm text-gray-700 hover:text-orange-500 transition border border-gray-200 rounded-lg px-3 py-1.5">
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+        </div>
       </div>
     </header>
   );

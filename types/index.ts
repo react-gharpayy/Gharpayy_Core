@@ -2,9 +2,22 @@ export interface AuthPayload {
   id: string;
   email: string;
   fullName: string;
-  role: 'admin' | 'manager' | 'employee' | 'sub_admin' | 'hr';
+  /** Legacy role field — kept for backward compatibility */
+  role: 'admin' | 'manager' | 'employee' | 'sub_admin' | 'hr' | 'team_lead';
+  /**
+   * Permission tier used by lib/permissions.ts for access control.
+   * When present and non-null, this takes precedence over `role` for permission checks.
+   * Valid: 'admin' | 'manager' | 'team_lead' | 'hr' | 'employee'
+   * null = not yet assigned, falls back to `role`
+   */
+  systemRole?: string | null;
+  /** ID of the team this user belongs to */
+  teamId?: string;
+  /** @deprecated use teamId instead */
   assignedTeamId?: string;
   playbookRole?: string;
+  /** ID of the HierarchyRole document for display purposes */
+  hierarchyRoleId?: string;
 }
 
 export interface LeaveBalance {

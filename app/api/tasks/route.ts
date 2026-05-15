@@ -9,6 +9,7 @@ import { taskSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
 import { getISTDateStr } from '@/lib/attendance-utils';
 import { isAdmin, isElevated, isSubAdmin, canAccessEmployee } from '@/lib/role-guards';
+import { emitGrowthEvent } from '@/lib/growth-events';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildSummary(tasks: any[]) {
@@ -100,25 +101,17 @@ export async function POST(req: NextRequest) {
     if (!mongoose.Types.ObjectId.isValid(assignedTo)) return NextResponse.json({ error: 'Invalid assignedTo' }, { status: 400 });
 
     await connectDB();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const assignee = await User.findById(assignedTo).populate('officeZoneId', 'name').lean() as any;
+    // Fetch assignee with team info
+    const assignee = await User.findById(assignedTo).populate('teamId', 'name').lean() as any;
     if (!assignee) return NextResponse.json({ error: 'Assignee not found' }, { status: 404 });
-
-    // sub_admin: enforce that assignee belongs to their team
-    if (isSubAdmin(user) && user.role !== 'manager') {
-      const zoneId = assignee.officeZoneId?._id?.toString() || assignee.officeZoneId?.toString();
-      if (!canAccessEmployee(user, zoneId)) {
-        return NextResponse.json({ error: 'Cannot assign task to employee outside your team' }, { status: 403 });
-      }
-    }
 
     const task = await Task.create({
       title: String(title).trim(), description: description || '',
       assignedTo, assignedToName: assignedToName || assignee.fullName || assignee.email,
       assignedBy: user.id, assignedByName: user.fullName || user.email || 'Manager',
       dueDate: dueDate || null, priority: priority || 'medium', status: 'todo',
-      teamId:   teamId   || assignee.officeZoneId?._id?.toString?.() || null,
-      teamName: teamName || assignee.officeZoneId?.name || '',
+      teamId:   teamId   || assignee.teamId?._id?.toString?.() || assignee.teamId?.toString() || null,
+      teamName: teamName || assignee.teamName || assignee.teamId?.name || '',
     });
     return NextResponse.json({ ok: true, task: normalizeTask(task) });
   } catch (e: unknown) {
@@ -154,12 +147,37 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    const oldStatus = task.status;
     if (status) task.status = status;
     if (completionNote  !== undefined) task.completionNote  = completionNote;
     if (completionPhoto !== undefined) task.completionPhoto = completionPhoto;
     if (status === 'completed' && !task.completedAt) task.completedAt = new Date();
     if (status && status !== 'completed') task.completedAt = null;
     await task.save();
+
+    // Growth Engine Integration: Award XP for task completion
+    if (status === 'completed' && oldStatus !== 'completed') {
+      void emitGrowthEvent({
+        userId: task.assignedTo.toString(),
+        event: 'TASK_CLOSED',
+        sourceId: task._id.toString(),
+        sourceType: 'task'
+      });
+
+      // Bonus: Task Closed Early
+      if (task.dueDate && task.completedAt) {
+        const completedDateStr = getISTDateStr(task.completedAt);
+        if (completedDateStr < task.dueDate) {
+          void emitGrowthEvent({
+            userId: task.assignedTo.toString(),
+            event: 'TASK_CLOSED_EARLY',
+            sourceId: `${task._id.toString()}_early`,
+            sourceType: 'task',
+            note: `Completed on ${completedDateStr} before due date ${task.dueDate}`
+          });
+        }
+      }
+    }
     return NextResponse.json({ ok: true, task: normalizeTask(task) });
   } catch (e: unknown) {
     console.error('API error:', e);

@@ -1,11 +1,15 @@
-﻿'use client';
+'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Clock, CheckCircle, XCircle, MapPin, Menu, X, Home, User, Bell, Calendar, ClipboardList } from 'lucide-react';
 import EmployeeNav from '@/components/employee-nav';
 import NoticesEmployee from '@/components/notices-employee';
+import { XPBar } from '@/modules/growth/components/XPBar';
+import { StreakWidget } from '@/modules/growth/components/StreakWidget';
+import { AchievementBadge } from '@/modules/growth/components/AchievementBadge';
+import { Sparkles, Trophy, ChevronRight, Target } from 'lucide-react';
 
-interface User { id: string; email: string; fullName: string; role: string; }
+interface User { id: string; email: string; fullName: string; role: string; growthEngineEnabled?: boolean; }
 
 const MOBILE_TABS = [
   { label: 'Home',          href: '/home',    icon: Home  },
@@ -44,6 +48,7 @@ export default function EmployeeHome({ user }: { user: User }) {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [leaveBalance, setLeaveBalance] = useState<any>(null);
   const [teamLeaves, setTeamLeaves] = useState<any[]>([]);
+  const [growth, setGrowth] = useState<any>(null);
 
   const fetchStatus = () => {
     setLoading(true);
@@ -72,6 +77,11 @@ export default function EmployeeHome({ user }: { user: User }) {
     fetch(`/api/leaves/team?from=${todayStr}&to=${to}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { if (Array.isArray(d.leaves)) setTeamLeaves(d.leaves); })
+      .catch(() => {});
+
+    fetch('/api/growth/profile', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (d.ok) setGrowth(d); })
       .catch(() => {});
   }, []);
 
@@ -344,6 +354,75 @@ export default function EmployeeHome({ user }: { user: User }) {
             )}
           </div>
         </div>
+
+        {/* Growth & Rewards Section */}
+        {growth && user.growthEngineEnabled && (
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/50 to-transparent">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-orange-100 text-orange-600">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-gray-900">Arena Growth</h3>
+              </div>
+              <StreakWidget count={growth.profile.streakDays} />
+            </div>
+            
+            <div className="p-5 space-y-6">
+              <XPBar 
+                currentXP={growth.profile.xp}
+                level={growth.profile.level}
+                xpInLevel={growth.profile.xpInLevel}
+                xpForNextLevel={growth.profile.xpForNextLevel}
+                progress={growth.profile.progress}
+              />
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Trophy className="w-3 h-3" />
+                    Top Achievements
+                  </h4>
+                  <button onClick={() => router.push('/growth/quests')} className="text-[10px] font-bold text-orange-600 hover:underline flex items-center">
+                    View Missions <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+                
+                <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+                  {growth.achievements.list.slice(0, 5).map((ach: any) => (
+                    <AchievementBadge 
+                      key={ach.id}
+                      id={ach.id}
+                      title={ach.title}
+                      description={ach.description}
+                      level={ach.level}
+                      earned={ach.earned}
+                      progress={ach.progress}
+                      className="flex-shrink-0"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button 
+                  onClick={() => router.push('/growth/quests')}
+                  className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-gray-50 border border-gray-100 hover:bg-orange-50 hover:border-orange-100 transition group"
+                >
+                  <Target className="w-4 h-4 text-gray-400 group-hover:text-orange-500" />
+                  <span className="text-xs font-bold text-gray-700">Daily Quests</span>
+                </button>
+                <button 
+                  onClick={() => router.push('/growth/leaderboard')}
+                  className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-gray-50 border border-gray-100 hover:bg-orange-50 hover:border-orange-100 transition group"
+                >
+                  <Trophy className="w-4 h-4 text-gray-400 group-hover:text-orange-500" />
+                  <span className="text-xs font-bold text-gray-700">Leaderboard</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Notices */}
         <NoticesEmployee />

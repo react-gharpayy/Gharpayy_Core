@@ -16,6 +16,24 @@ export interface IUser extends Document {
   department?: string;
   playbookRole?: string;
   activeSessionToken?: string;
+  // ── Hierarchy fields (added for flexible role system) ──────────────────────
+  /** Reference to a HierarchyRole document for display/custom role names */
+  hierarchyRoleId?: mongoose.Types.ObjectId;
+  /** Reference to the Team this user belongs to */
+  teamId?: mongoose.Types.ObjectId;
+  /**
+   * Display job title — separate from hierarchy role and playbook role.
+   * Examples: "HR Executive", "Senior Recruiter", "Engineering Lead"
+   * This is purely for display; it does NOT affect permissions.
+   */
+  jobTitle?: string;
+  /**
+   * The permission tier used for access control.
+   * Maps to ROLE_PERMISSIONS keys in lib/permissions.ts.
+   * Defaults to the value of `role` for backward compatibility.
+   * Valid: 'admin' | 'manager' | 'team_lead' | 'hr' | 'employee'
+   */
+  systemRole?: string;
   workSchedule?: {
     shiftType?: 'FT_MAIN' | 'FT_EARLY' | 'INTERN_DAY' | 'CUSTOM';
     startTime: string;
@@ -24,7 +42,6 @@ export interface IUser extends Document {
     breaks?: { name: string; start: string; end: string; durationMinutes: number }[];
     weekOffs?: string[];
     isCustomShift?: boolean;
-    isLocked: boolean;
     setBy: 'employee' | 'admin';
   };
   leaves?: {
@@ -51,7 +68,6 @@ const WorkScheduleSchema = new Schema({
   breaks:        { type: [WorkBreakSchema], default: [] },
   weekOffs:      { type: [String], default: [] },
   isCustomShift: { type: Boolean, default: false },
-  isLocked:      { type: Boolean, default: false },
   setBy:         { type: String, enum: ['employee', 'admin'], default: 'employee' },
 }, { _id: false });
 
@@ -76,10 +92,26 @@ const UserSchema = new Schema({
   department:   { type: String, default: '' },
   playbookRole: { type: String, default: 'recruiter' },
   activeSessionToken: { type: String, default: null },
+  // ── Hierarchy fields ───────────────────────────────────────────────────────
+  hierarchyRoleId: { type: Schema.Types.ObjectId, ref: 'GpHierarchyRole', default: null },
+  teamId:          { type: Schema.Types.ObjectId, ref: 'GpTeam', default: null },
+  jobTitle:        { type: String, default: '' },
+  /**
+   * Permission tier for access control. Falls back to `role` field when absent/null.
+   * No enum constraint here — validation is handled in lib/permissions.ts.
+   * Valid values: 'admin' | 'manager' | 'team_lead' | 'hr' | 'employee'
+   */
+  systemRole: { type: String, default: null },
   workSchedule: { type: WorkScheduleSchema, default: () => ({}) },
   leaves:       { type: [LeaveSchema], default: [] },
-  createdAt:    { type: Date, default: Date.now },
-  updatedAt:    { type: Date, default: Date.now },
+}, { 
+  timestamps: true,
+  collection: 'gpattusers'
 });
 
-export default mongoose.models.GpAttUser || mongoose.model('GpAttUser', UserSchema);
+UserSchema.index({ role: 1, isApproved: 1 });
+UserSchema.index({ officeZoneId: 1, role: 1 });
+UserSchema.index({ managerId: 1 });
+UserSchema.index({ teamId: 1 });
+
+export default mongoose.models?.GpAttUser || mongoose.model('GpAttUser', UserSchema);

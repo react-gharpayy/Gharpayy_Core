@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { ArenaDailyState, ArenaKPIDefinition, ArenaSprintPlan, ArenaCommWindow } from '@/models/ArenaState';
-import { PlaybookRole } from '@/models/PlaybookRole';
 import User from '@/models/User';
+import '@/models/HierarchyRole';
 import mongoose from 'mongoose';
 
 export async function GET(req: NextRequest) {
@@ -15,38 +15,57 @@ export async function GET(req: NextRequest) {
     const userId = searchParams.get('userId') || authUser.id;
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-    // SECURITY: If querying for another user, must be admin/manager/hr
     if (userId !== authUser.id && !['admin', 'manager', 'hr'].includes(authUser.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await connectDB();
-    
-    // Fetch user for playbookRole
-    const user = await User.findById(userId).select('fullName email playbookRole workSchedule');
+
+    const user = await User.findById(userId)
+      .select('fullName email playbookRole teamName teamId department jobTitle workSchedule hierarchyRoleId')
+      .populate({ path: 'hierarchyRoleId', select: 'name color level', strictPopulate: false })
+      .lean() as any;
+
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     let state = await ArenaDailyState.findOne({ userId, date });
     if (!state) {
-      state = await ArenaDailyState.create({ 
-        userId, date, kpis: {}, sprints: {}, decisions: [], reportData: {}, shieldMode: false 
+      state = await ArenaDailyState.create({
+        userId, date, kpis: {}, sprints: {}, decisions: [], reportData: {}, shieldMode: false,
       });
     }
 
-    const userRole = user.playbookRole || 'recruiter';
-    const [kpis, sprints, comms, roleData] = await Promise.all([
-      ArenaKPIDefinition.find({ role: userRole }).sort({ orderIndex: 1 }),
-      ArenaSprintPlan.find({ role: userRole }).sort({ orderIndex: 1 }),
-      ArenaCommWindow.find({ role: userRole }).sort({ orderIndex: 1 }),
-      PlaybookRole.findOne({ slug: userRole })
+    // KPIs and sprints are owned by the user's TEAM, not their playbook role.
+    // If the user has no team assigned, they get no KPIs (shown as "Assign to a team first").
+    const userTeamName = user.teamName || null;
+
+    const [kpis, sprints, comms] = await Promise.all([
+      userTeamName
+        ? ArenaKPIDefinition.find({ teamName: userTeamName, isActive: true }).sort({ orderIndex: 1 })
+        : Promise.resolve([]),
+      userTeamName
+        ? ArenaSprintPlan.find({ teamName: userTeamName }).sort({ orderIndex: 1 })
+        : Promise.resolve([]),
+      ArenaCommWindow.find({}).sort({ orderIndex: 1 }),
     ]);
 
-    return NextResponse.json({ 
-      ok: true, 
-      state, 
-      user, 
-      roleData,
-      definitions: { kpis, sprints, comms } 
+    return NextResponse.json({
+      ok: true,
+      state,
+      user: {
+        ...user,
+        teamContext: {
+          teamName:      user.teamName   || null,
+          department:    user.department || null,
+          jobTitle:      user.jobTitle   || null,
+          hierarchyRole: user.hierarchyRoleId
+            ? { name: (user.hierarchyRoleId as any).name, color: (user.hierarchyRoleId as any).color }
+            : null,
+        },
+      },
+      // teamData replaces roleData — team is the KPI owner
+      teamData: { teamName: userTeamName },
+      definitions: { kpis, sprints, comms },
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

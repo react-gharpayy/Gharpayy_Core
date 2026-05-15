@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
 import User from '@/models/User';
+import { requirePermission } from '@/lib/permission-middleware';
 
 export async function POST(req: NextRequest) {
   try {
-    const authUser = await getAuthUser();
-    if (!authUser || authUser.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { error } = await requirePermission('MANAGE_ROLES');
+    if (error) return error;
 
     const body = await req.json();
     const { employeeId, playbookRole } = body;

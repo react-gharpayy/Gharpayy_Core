@@ -6,5 +6,5 @@ export default async function HomePage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
   if (user.role === 'admin' || user.role === 'manager') redirect('/command-center');
-  return <MyAttendance />;
+  redirect('/dashboard');
 }
