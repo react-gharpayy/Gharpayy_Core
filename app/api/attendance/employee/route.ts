@@ -59,10 +59,15 @@ export async function GET(req: NextRequest) {
     if (att) {
       recomputeAttendanceTotals(att);
       const derived = deriveStatusFromAttendance(att, rules);
+      let changed = false;
       if (att.dayStatus !== derived.dayStatus || (att.lateByMins || 0) !== derived.lateByMins || (att.earlyByMins || 0) !== derived.earlyByMins) {
         att.dayStatus = derived.dayStatus;
         att.lateByMins = derived.lateByMins;
         att.earlyByMins = derived.earlyByMins;
+        changed = true;
+      }
+      if (changed || att.isModified()) {
+        att.markModified('sessions');
         await att.save();
       }
       att.sessions.forEach((s: any, idx: number) => {

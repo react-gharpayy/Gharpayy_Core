@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Clock } from 'lucide-react';
+import { AuditLog, formatHHMM } from '@/lib/attendance-shared';
 
 interface AttStatus {
   isCheckedIn: boolean;
@@ -72,6 +73,11 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
   const [historyStart, setHistoryStart] = useState('');
   const [historyEnd, setHistoryEnd] = useState('');
   const [coachingSessions, setCoachingSessions] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotalPages, setAuditTotalPages] = useState(1);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [user, setUser] = useState<{ id: string; role: string; fullName?: string } | null>(null);
 
   const fetchCoaching = async (empId: string) => {
     try {
@@ -142,10 +148,28 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
     }
   };
 
+  const fetchAudits = async (empId: string, page = 1) => {
+    setAuditLoading(true);
+    try {
+      const r = await fetch(`/api/attendance/audit?employeeId=${empId}&page=${page}&limit=15`, { cache: 'no-store' });
+      const d = await r.json();
+      if (d.ok) {
+        setAuditLogs(d.audits || []);
+        setAuditPage(d.page || 1);
+        setAuditTotalPages(d.pages || 1);
+      }
+    } catch {
+      setAuditLogs([]);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
       .then(r => r.json())
       .then(async me => {
+        setUser(me);
         setUserRole(me.role || '');
         if (me.role === 'admin' || me.role === 'manager') {
           const e = await fetch('/api/employees?page=1&limit=100', { cache: 'no-store' }).then(r => r.json()).catch(() => ({ users: [] }));
@@ -159,6 +183,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
             fetchDetail(first);
             fetchHistory(first, 1);
             fetchCoaching(first);
+            fetchAudits(first, 1);
           }
         } else {
           const selfId = me.id || '';
@@ -188,6 +213,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
         fetchDetail(effectiveEmployeeId);
         fetchHistory(effectiveEmployeeId, 1);
         fetchCoaching(effectiveEmployeeId);
+        fetchAudits(effectiveEmployeeId, 1);
       }
     }
   }, [effectiveEmployeeId, userRole]);
@@ -576,7 +602,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
           <div className="space-y-2 text-xs text-gray-700">
             <div>Shift Type: <span className="font-semibold text-gray-900">{detail.workSchedule.shiftType || 'CUSTOM'}</span></div>
             <div>Work Timing: <span className="font-semibold text-gray-900">{detail.workSchedule.startTime} - {detail.workSchedule.endTime}</span></div>
-            <div>Break Duration: <span className="font-semibold text-gray-900">{detail.workSchedule.breakDuration || 0} mins</span></div>
+            <div>Break Duration: <span className="font-semibold text-gray-900">{formatHHMM(detail.workSchedule.breakDuration || 0)}</span></div>
             <div>Week Offs: <span className="font-semibold text-gray-900">{(detail.workSchedule.weekOffs || []).join(', ') || 'Not set'}</span></div>
             {Array.isArray(detail.workSchedule.breaks) && detail.workSchedule.breaks.length > 0 && (
               <div className="pt-1">
@@ -585,7 +611,7 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
                   {detail.workSchedule.breaks.map((b: any, i: number) => (
                     <div key={`${b.name}-${i}`} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-2 py-1">
                       <span className="text-gray-700">{b.name || 'Break'}</span>
-                      <span className="text-gray-600">{b.start} - {b.end} ({b.durationMinutes || 0}m)</span>
+                      <span className="text-gray-600">{b.start} - {b.end} ({formatHHMM(b.durationMinutes || 0)})</span>
                     </div>
                   ))}
                 </div>
@@ -677,27 +703,62 @@ export default function EmployeeDetail({ employeeId }: { employeeId?: string }) 
         </div>
       </div>
 
-      {/* Leave History */}
-      <div className="bg-white rounded-3xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Leave History</h3>
-        {leaveHistory.length === 0 ? (
-          <div className="text-xs text-gray-500">No leave history available.</div>
-        ) : (
-          <div className="space-y-2">
-            {leaveHistory.map((l: any) => (
-              <div key={`${l._id}`} className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
-                <div className="font-semibold text-gray-900">{l.type}</div>
-                <div className="text-gray-700">{l.startDate} to {l.endDate}</div>
-                <div className="text-gray-700">{l.days} day(s)</div>
-                <div className={`text-xs font-semibold ${l.status === 'approved' ? 'text-emerald-600' : l.status === 'rejected' ? 'text-red-600' : 'text-orange-500'}`}>
-                  {l.status}
+      {/* Audit Logs (Admin Only) */}
+      {['admin', 'manager', 'hr'].includes(userRole) && (
+        <div className="bg-white rounded-3xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-400" />
+            Audit & Forensic Logs
+          </h3>
+          {auditLoading ? (
+            <div className="text-xs text-gray-500">Loading audit trail...</div>
+          ) : auditLogs.length === 0 ? (
+            <div className="text-xs text-gray-500">No audit logs recorded for this employee.</div>
+          ) : (
+            <div className="space-y-2">
+              {auditLogs.map((log: any) => (
+                <div key={log._id} className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px] sm:text-xs bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 items-center">
+                  <div className="font-semibold text-gray-800">{new Date(log.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
+                  <div>
+                    <span className={`px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${
+                      log.action.includes('check_in') || log.action.includes('field_return') ? 'bg-emerald-100 text-emerald-700' :
+                      log.action.includes('break_start') ? 'bg-orange-100 text-orange-700' :
+                      log.action.includes('auto_close') ? 'bg-purple-100 text-purple-700' :
+                      log.action.includes('correction') ? 'bg-blue-100 text-blue-700' :
+                      'bg-gray-200 text-gray-700'
+                    }`}>
+                      {log.action.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="text-gray-600">{log.date}</div>
+                  <div className="text-gray-500 truncate" title={log.actorId?.fullName}>By: {log.actorId?.fullName || 'System'}</div>
+                  <div className="text-gray-400 text-[9px] truncate">
+                    {log.metadata ? JSON.stringify(log.metadata) : ''}
+                  </div>
                 </div>
-                <div className="text-gray-600">{l.reason || 'No reason'}</div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
+          
+          <div className="flex items-center justify-between mt-3 text-xs text-gray-600">
+            <button
+              disabled={auditPage <= 1}
+              onClick={() => selectedEmployee && fetchAudits(selectedEmployee, auditPage - 1)}
+              className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span>Page {auditPage} of {auditTotalPages}</span>
+            <button
+              disabled={auditPage >= auditTotalPages}
+              onClick={() => selectedEmployee && fetchAudits(selectedEmployee, auditPage + 1)}
+              className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50"
+            >
+              Next
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Performance / KPI */}
       <div className="bg-white rounded-3xl border border-gray-200 p-6">

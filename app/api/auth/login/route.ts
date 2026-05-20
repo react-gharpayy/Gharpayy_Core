@@ -40,32 +40,50 @@ export async function POST(req: NextRequest) {
     }
 
     // Non-admin: enforce schema
-    const { email, password } = loginSchema.parse({ email: normEmail, password: normPass });
-    await connectDB();
+    let validatedData;
+    try {
+      validatedData = loginSchema.parse({ email: normEmail, password: normPass });
+    } catch (parseError) {
+      if (parseError instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid email or password format.' }, { status: 400 });
+      }
+      throw parseError;
+    }
+    const { email, password } = validatedData;
+
+    try {
+      await connectDB();
+    } catch (dbError) {
+      console.error('[Login Hardening] Database connection failed:', dbError);
+      return NextResponse.json({ error: 'Database connection failed. Please try again.' }, { status: 500 });
+    }
+
     // Explicitly reference models to ensure registration
     const _ref1 = HierarchyRole;
     const _ref2 = Team;
-    const user = await User.findOne({ email: email.toLowerCase() }).populate('hierarchyRoleId');
+
+    let user;
+    try {
+      user = await User.findOne({ email: email.toLowerCase() }).populate('hierarchyRoleId');
+    } catch (findError) {
+      console.error('[Login Hardening] User lookup failed:', findError);
+      return NextResponse.json({ error: 'User lookup failed.' }, { status: 500 });
+    }
+
     if (!user) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
 
-    const valid = await bcrypt.compare(password, user.password);
+    let valid = false;
+    try {
+      valid = await bcrypt.compare(password, user.password);
+    } catch (bcryptError) {
+      console.error('[Login Hardening] Password decryption failed:', bcryptError);
+      return NextResponse.json({ error: 'Password verification failed.' }, { status: 500 });
+    }
     if (!valid) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
 
     // Check if employee is approved (unchanged)
     if (user.role === 'employee' && !user.isApproved) {
       return NextResponse.json({ error: 'Your account is pending admin approval' }, { status: 403 });
-    }
-
-    // Check for existing active session
-    if (user.activeSessionToken) {
-      const incomingToken = req.cookies.get(COOKIE_NAME)?.value;
-      if (incomingToken !== user.activeSessionToken) {
-        const existingSession = verifyToken(user.activeSessionToken);
-        if (existingSession) {
-          // If the token is still valid (not expired), prevent login
-          return NextResponse.json({ error: 'Already logged in at some other place.' }, { status: 403 });
-        }
-      }
     }
 
     // Extract capabilities from hierarchy role (supports both old 'permissions' and new 'capabilities' field)
@@ -89,11 +107,25 @@ export async function POST(req: NextRequest) {
       capabilities: userCapabilities,
     };
 
-    const token = signToken(tokenPayload);
+    let token;
+    try {
+      token = signToken(tokenPayload);
+    } catch (tokenError) {
+      console.error('[Login Hardening] JWT token generation failed:', tokenError);
+      return NextResponse.json({ error: 'Failed to generate session token.' }, { status: 500 });
+    }
 
-    // Save the new token as the active session
-    user.activeSessionToken = token;
-    await user.save();
+    try {
+      // Save the new token as the active session (informational only)
+      user.activeSessionToken = token;
+      user.activeSessionAt = new Date();
+      user.lastSeenAt = new Date();
+      await user.save();
+    } catch (saveError) {
+      // Hardening: Do NOT block login if metadata database save fails.
+      // Favor operational continuity over aggressive tracking.
+      console.warn('[Login Hardening] Failed to update user active session metadata:', saveError);
+    }
 
     const userResponse: Record<string, any> = {
       id:       user._id.toString(),
@@ -103,7 +135,12 @@ export async function POST(req: NextRequest) {
     };
 
     const res = NextResponse.json({ ok: true, user: userResponse });
-    res.cookies.set(COOKIE_NAME, token, COOKIE_OPTIONS);
+    try {
+      res.cookies.set(COOKIE_NAME, token, COOKIE_OPTIONS);
+    } catch (cookieError) {
+      console.error('[Login Hardening] Setting auth cookie failed:', cookieError);
+      return NextResponse.json({ error: 'Failed to establish session cookies.' }, { status: 500 });
+    }
     return res;
 
   } catch (e: unknown) {

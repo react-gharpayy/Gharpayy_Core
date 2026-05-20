@@ -1,7 +1,21 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, RefreshCw, WifiOff, BarChart3 } from 'lucide-react';
+
+// Isolated clock component — renders every second without re-rendering parent
+const LiveClock = memo(function LiveClock() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const tick = () => setTime(new Date().toLocaleTimeString('en-IN', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Kolkata'
+    }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span>{time} — Bangalore</span>;
+});
 
 interface CCData {
   summary: {
@@ -110,61 +124,90 @@ export default function CommandCenter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [degraded, setDegraded] = useState(false);
-  const [time, setTime] = useState('');
 
   const fetchData = useCallback(async () => {
-    setLoading(prev => prev); // Keep existing data during refresh
     try {
-      const r = await fetch('/api/command-center', { cache: 'no-store' });
-      const cc = await r.json();
+      // Parallel fetch: command-center + CRM — neither blocks the other
+      const [ccRes, crmRes] = await Promise.allSettled([
+        fetch('/api/command-center', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/integrations/crm/daily', { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+      ]);
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[CommandCenter] API response:', cc);
-      }
+      const cc = ccRes.status === 'fulfilled' ? ccRes.value : null;
+      const crm = crmRes.status === 'fulfilled' ? crmRes.value : null;
 
       if (cc?.ok && cc.summary) {
         setData(cc as CCData);
         setError(null);
         setDegraded(false);
       } else if (cc?.fallbackData) {
-        // API returned fallbackData — show degraded mode
         setData({ ...EMPTY_DATA, ...cc.fallbackData });
         setError(cc.error || 'Partial data available');
         setDegraded(true);
       } else {
-        // Complete failure
         console.error('[CommandCenter] API load failed:', cc?.error);
         setError(cc?.error || 'Failed to load dashboard data');
         setDegraded(true);
-        if (!data) setData(EMPTY_DATA); // Show empty state instead of null
+        setData(d => d ?? EMPTY_DATA);
       }
+
+      if (crm && !crm.error) setCrmDaily(crm);
     } catch (err) {
       console.error('[CommandCenter] Network error:', err);
       setError('Network error — check your connection');
       setDegraded(true);
-      if (!data) setData(EMPTY_DATA);
+      setData(d => d ?? EMPTY_DATA);
     } finally {
       setLoading(false);
     }
-    
-    // CRM loads independently — failure does NOT affect main dashboard
-    fetch('/api/integrations/crm/daily', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(crm => { if (crm && !crm.error) setCrmDaily(crm); else setCrmDaily(null); })
-      .catch(() => setCrmDaily(null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 60000);
-    const tick = () => setTime(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }));
-    tick();
-    const clock = setInterval(tick, 1000);
-    return () => { clearInterval(interval); clearInterval(clock); };
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   const scoreColor = (s: number) => s >= 80 ? '#10b981' : s >= 60 ? '#f59e0b' : '#ef4444';
   const card = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 20, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' };
+
+  // Memoize teamPulse rows — only recomputes when API data changes, not on every clock tick
+  const teamPulseRows = useMemo(() => {
+    const pulse = data?.teamPulse ?? [];
+    return pulse.map(emp => {
+      const [bg, fg] = avColor(emp.employeeName ?? '');
+      return (
+        <div key={emp.employeeId}
+          className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-all hover:bg-gray-50 cursor-pointer"
+          onClick={() => router.push('/live-attendance')}>
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex-shrink-0">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold"
+                style={{ background: bg, color: fg }}>
+                {initials(emp.employeeName ?? '')}
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+                style={{ background: MODE_DOT[emp.workMode] ?? '#374151', borderColor: '#ffffff' }}/>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-gray-900 leading-tight">
+                {(emp.employeeName ?? '').split(' ').map((n, i) => i === 0 ? n : n[0] + '.').join(' ')}
+              </div>
+              <div className="text-[10px]" style={{ color: '#6b7280' }}>{emp.team ?? 'No Zone'}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {emp.checkInTime && (
+              <span className="text-[10px]" style={{ color: '#6b7280' }}>{emp.checkInTime}</span>
+            )}
+            <span className="text-xs font-semibold" style={{ color: MODE_LABEL_COLOR[emp.workMode] ?? '#9ca3af' }}>
+              {emp.workMode}
+            </span>
+          </div>
+        </div>
+      );
+    });
+  }, [data?.teamPulse, router]);
 
   // Loading skeleton
   if (loading && !data) return (
@@ -224,7 +267,7 @@ export default function CommandCenter() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900">ARENA OS - Workforce Overview</h1>
             <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
-              {time} - Bangalore
+              <LiveClock />
             </div>
             {needAction.length > 0 && (
               <div className="mt-2 text-xs" style={{ color: '#6b7280' }}>
@@ -407,43 +450,11 @@ export default function CommandCenter() {
           </div>
         </div>
 
-        {teamPulse.length === 0 ? (
+        {(data?.teamPulse?.length ?? 0) === 0 ? (
           <div className="py-8 text-center text-sm text-gray-400">No employee data available.</div>
         ) : (
           <div className="space-y-1 max-h-72 overflow-y-auto no-scrollbar">
-            {teamPulse.map(emp => {
-              const [bg, fg] = avColor(emp.employeeName ?? '');
-              return (
-                <div key={emp.employeeId}
-                  className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-all hover:bg-gray-50 cursor-pointer"
-                  onClick={() => router.push('/live-attendance')}>
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative flex-shrink-0">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold"
-                        style={{ background: bg, color: fg }}>
-                        {initials(emp.employeeName ?? '')}
-                      </div>
-                      <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
-                        style={{ background: MODE_DOT[emp.workMode] ?? '#374151', borderColor: '#ffffff' }}/>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 leading-tight">
-                        {(emp.employeeName ?? '').split(' ').map((n, i) => i === 0 ? n : n[0] + '.').join(' ')}
-                      </div>
-                      <div className="text-[10px]" style={{ color: '#6b7280' }}>{emp.team ?? 'No Zone'}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {emp.checkInTime && (
-                      <span className="text-[10px]" style={{ color: '#6b7280' }}>{emp.checkInTime}</span>
-                    )}
-                    <span className="text-xs font-semibold" style={{ color: MODE_LABEL_COLOR[emp.workMode] ?? '#9ca3af' }}>
-                      {emp.workMode}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+            {teamPulseRows}
           </div>
         )}
       </div>

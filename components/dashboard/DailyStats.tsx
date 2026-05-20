@@ -8,10 +8,10 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
+import { formatHHMM } from '@/lib/attendance-shared';
 
 interface DailyStatsProps {
   taskStats: { total: number; pending: number; overdue: number; completed: number } | null;
-  leaveStats: { pending: number; approved: number } | null;
   attendanceRate: number | null;
   punctualityRate: number | null;
   avgWorkMins: number | null;
@@ -33,11 +33,11 @@ function StatCard({ label, value, sub, icon: Icon, color, bg }: any) {
   );
 }
 
-export function DailyStats({ taskStats, leaveStats, attendanceRate, punctualityRate, avgWorkMins, loading }: DailyStatsProps) {
+export function DailyStats({ taskStats, attendanceRate, punctualityRate, avgWorkMins, loading }: DailyStatsProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
-        {[...Array(5)].map((_, i) => (
+      <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        {[...Array(4)].map((_, i) => (
           <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm h-32 animate-pulse" />
         ))}
       </div>
@@ -45,11 +45,11 @@ export function DailyStats({ taskStats, leaveStats, attendanceRate, punctualityR
   }
 
   const workHours = avgWorkMins != null
-    ? `${Math.floor(avgWorkMins / 60)}h ${avgWorkMins % 60}m avg`
+    ? `${formatHHMM(avgWorkMins)} avg`
     : null;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+    <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
       <StatCard
         label="Attendance (7d)"
         value={attendanceRate != null ? `${attendanceRate}%` : null}
@@ -81,14 +81,6 @@ export function DailyStats({ taskStats, leaveStats, attendanceRate, punctualityR
         icon={Target}
         color="text-purple-500"
         bg="bg-purple-50"
-      />
-      <StatCard
-        label="Leaves Pending"
-        value={leaveStats?.pending ?? null}
-        sub={leaveStats?.approved ? `${leaveStats.approved} approved` : 'None pending'}
-        icon={Calendar}
-        color="text-indigo-500"
-        bg="bg-indigo-50"
       />
     </div>
   );

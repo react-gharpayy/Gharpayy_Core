@@ -16,6 +16,8 @@ export interface IUser extends Document {
   department?: string;
   playbookRole?: string;
   activeSessionToken?: string;
+  activeSessionAt?: Date;
+  lastSeenAt?: Date;
   // ── Hierarchy fields (added for flexible role system) ──────────────────────
   /** Reference to a HierarchyRole document for display/custom role names */
   hierarchyRoleId?: mongoose.Types.ObjectId;
@@ -92,6 +94,8 @@ const UserSchema = new Schema({
   department:   { type: String, default: '' },
   playbookRole: { type: String, default: 'recruiter' },
   activeSessionToken: { type: String, default: null },
+  activeSessionAt: { type: Date, default: null },
+  lastSeenAt: { type: Date, default: null },
   // ── Hierarchy fields ───────────────────────────────────────────────────────
   hierarchyRoleId: { type: Schema.Types.ObjectId, ref: 'GpHierarchyRole', default: null },
   teamId:          { type: Schema.Types.ObjectId, ref: 'GpTeam', default: null },

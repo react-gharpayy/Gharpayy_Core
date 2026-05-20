@@ -78,8 +78,7 @@ export async function GET() {
         Attendance.find({ employeeId: { $in: employeeIds }, date: today }, 'employeeId workMode dayStatus sessions isCheckedIn isOnBreak isInField').lean(),
         Attendance.find({ employeeId: { $in: employeeIds }, date: yDate }, 'employeeId dayStatus').lean(),
         (async () => {
-          const isManagerRole = ['manager', 'team_lead'].includes(legacyRole) || ['manager', 'team_lead'].includes(userRole);
-          const taskFilter = isManagerRole ? { assignedTo: { $in: employeeIds } } : {};
+          const taskFilter = { assignedTo: { $in: employeeIds } };
           
           const stats = await Task.aggregate([
             { $match: taskFilter },
@@ -97,19 +96,11 @@ export async function GET() {
           return { total, blocked, completed, overdue };
         })(),
         (async () => {
-          const isManagerRole = ['manager', 'team_lead'].includes(legacyRole) || ['manager', 'team_lead'].includes(userRole);
-          if (isManagerRole) {
-            return ExceptionRequest.countDocuments({ status: 'pending', employeeId: { $in: employeeIds } });
-          }
-          return ExceptionRequest.countDocuments({ status: 'pending' });
+          return ExceptionRequest.countDocuments({ status: 'pending', employeeId: { $in: employeeIds } });
         })(),
         (async () => {
-          const isManagerRole = ['manager', 'team_lead'].includes(legacyRole) || ['manager', 'team_lead'].includes(userRole);
-          const trackerFilter: any = isManagerRole ? { employeeId: { $in: employeeIds } } : {};
-          
-          const trackerTotal = isManagerRole
-            ? total
-            : await User.countDocuments({ role: { $in: ['admin', 'manager', 'employee'] }, isApproved: { $ne: false } });
+          const trackerFilter = { employeeId: { $in: employeeIds } };
+          const trackerTotal = total;
 
           const weekStart = getISTDateDaysAgo(6);
           const monthStart = `${today.slice(0, 7)}-01`;

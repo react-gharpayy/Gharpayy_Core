@@ -23,6 +23,7 @@ const GrowthProfileSchema = new Schema<IGrowthProfile>({
   collection: 'gp_growth_profiles'
 });
 
-GrowthProfileSchema.index({ userId: 1 });
+// NOTE: userId already has a unique index via `unique: true` on the field definition above.
+// Do NOT add schema.index({ userId: 1 }) here — it creates a duplicate index and triggers a Mongoose warning.
 
 export default mongoose.models?.GrowthProfile || mongoose.model<IGrowthProfile>('GrowthProfile', GrowthProfileSchema);

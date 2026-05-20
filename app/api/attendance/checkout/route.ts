@@ -6,6 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr, recomputeAttendanceTotals } from '@/lib/attendance-utils';
 import { notifyDailySummary } from '@/lib/system-notifications';
 import { maybeCreditCompOff } from '@/lib/comp-off';
+import { logAttendanceAudit } from '@/lib/audit-logger';
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,9 +38,18 @@ export async function POST(req: NextRequest) {
     }
 
     const date = getISTDateStr();
-    const att = await Attendance.findOne({ employeeId: user.id, date });
+    let att = await Attendance.findOne({
+      employeeId: user.id,
+      $or: [{ isCheckedIn: true }, { isOnBreak: true }, { isInField: true }]
+    }).sort({ date: -1 });
 
-    if (!att) return NextResponse.json({ error: 'No attendance record for today' }, { status: 400 });
+    if (!att) {
+      att = await Attendance.findOne({ employeeId: user.id, date });
+    }
+
+    if (!att) return NextResponse.json({ error: 'No active attendance record found to clock out from' }, { status: 400 });
+    
+    recomputeAttendanceTotals(att);
 
     const now = new Date();
     const lastSession = att.sessions[att.sessions.length - 1];
@@ -62,30 +72,23 @@ export async function POST(req: NextRequest) {
 
     if (type === 'break_start') {
       if (!att.isCheckedIn) return NextResponse.json({ error: 'Clock in first to start break' }, { status: 400 });
+      if (att.isOnBreak) return NextResponse.json({ error: 'Break already active' }, { status: 400 });
       closeOpen();
       att.sessions.push({ checkIn: now, checkOut: null, type: 'break', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice });
-      att.isCheckedIn = false;
-      att.isOnBreak = true;
-      att.isInField = false;
-      att.workMode = 'Break';
+      logAttendanceAudit({ employeeId: user.id, attendanceId: att._id.toString(), action: 'break_start', date: att.date, actorId: user.id });
     } else if (type === 'field_exit') {
       if (!att.isCheckedIn) return NextResponse.json({ error: 'Clock in first to start field visit' }, { status: 400 });
+      if (att.isInField) return NextResponse.json({ error: 'Field visit already active' }, { status: 400 });
       closeOpen();
       att.sessions.push({ checkIn: now, checkOut: null, type: 'field', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice });
-      att.isCheckedIn = false;
-      att.isOnBreak = false;
-      att.isInField = true;
-      att.workMode = 'Field';
+      logAttendanceAudit({ employeeId: user.id, attendanceId: att._id.toString(), action: 'field_exit', date: att.date, actorId: user.id });
     } else {
       if (att.isOnBreak) return NextResponse.json({ error: 'End break first before clocking out' }, { status: 400 });
       if (att.isInField) return NextResponse.json({ error: 'Return from field first before clocking out' }, { status: 400 });
       if (!att.isCheckedIn) return NextResponse.json({ error: 'Not checked in' }, { status: 400 });
       closeOpen();
-      att.isCheckedIn = false;
-      att.isOnBreak = false;
-      att.isInField = false;
-      att.workMode = 'Present';
       finalClockOut = true;
+      logAttendanceAudit({ employeeId: user.id, attendanceId: att._id.toString(), action: 'check_out', date: att.date, actorId: user.id });
     }
 
     recomputeAttendanceTotals(att);

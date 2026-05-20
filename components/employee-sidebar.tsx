@@ -12,7 +12,6 @@ const NAV_ITEMS = [
   { label: 'My Attendance', href: '/attendance', icon: Clock },
   { label: 'Arena Console', href: '/arena', icon: Target },
   { label: 'Daily Updates', href: '/tracker', icon: ClipboardList },
-  { label: 'My Leaves', href: '/my-leaves', icon: Calendar },
   { label: 'My Tasks', href: '/my-tasks', icon: ClipboardList },
   { label: 'Announcements Hub', href: '/notices', icon: Bell },
   { label: 'Performance Analytics', href: '/my-performance', icon: TrendingUp },

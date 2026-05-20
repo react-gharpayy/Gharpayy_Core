@@ -3,14 +3,10 @@ import { useEffect, useState, useRef } from 'react';
 import EmployeeSidebar from '@/components/employee-sidebar';
 import SelfieCapture from '@/components/selfie-capture';
 
+import { formatHHMM, formatHMS } from '@/lib/attendance-shared';
+
 const BREAK_LIMIT_MINS = 45;
 
-function fmtClock(secs: number) {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 }
@@ -21,7 +17,6 @@ function fmtHHMMtoISTLabel(v?: string) {
   const ampm = hh >= 12 ? 'PM' : 'AM';
   return `${h12}:${String(mm).padStart(2, '0')} ${ampm}`;
 }
-
 const TIMELINE_COLOR: Record<string, string> = {
   checkin: '#10b981', checkout: '#374151', break_start: '#f59e0b', break_end: '#6366f1', field_exit: '#3b82f6', field_return: '#10b981',
 };
@@ -86,16 +81,27 @@ export default function MyAttendance() {
 
   const getLiveWorkSeconds = () => {
     if (!att) return 0;
-    if (!att.isCheckedIn && !att.isOnBreak && !att.isInField) {
-      return 0; // Reset to zero when fully clocked out
-    }
     let total = (att.totalWorkMins || 0) * 60;
-    if (att.isCheckedIn && !att.isOnBreak && att.sessions?.length > 0) {
+    if (att.sessions?.length > 0) {
       const lastSession = att.sessions[att.sessions.length - 1];
-      if (lastSession?.checkIn && !lastSession?.checkOut) {
+      if (lastSession?.checkIn && !lastSession?.checkOut && lastSession.type !== 'break') {
         const now = Date.now();
         const checkIn = new Date(lastSession.checkIn).getTime();
-        total += Math.floor((now - checkIn) / 1000);
+        total += Math.max(0, Math.floor((now - checkIn) / 1000));
+      }
+    }
+    return total;
+  };
+
+  const getLiveBreakSeconds = () => {
+    if (!att) return 0;
+    let total = (att.totalBreakMins || 0) * 60;
+    if (att.sessions?.length > 0) {
+      const lastSession = att.sessions[att.sessions.length - 1];
+      if (lastSession?.checkIn && !lastSession?.checkOut && lastSession.type === 'break') {
+        const now = Date.now();
+        const checkIn = new Date(lastSession.checkIn).getTime();
+        total += Math.max(0, Math.floor((now - checkIn) / 1000));
       }
     }
     return total;
@@ -119,10 +125,12 @@ export default function MyAttendance() {
   };
 
   const doAction = async (endpoint: string, body: any = {}) => {
+    console.log('[DEBUG-MYATTENDANCE] doAction called for endpoint:', endpoint, 'with body keys:', Object.keys(body));
     setClocking(true);
     flash('Verifying...', true);
     try {
       const pos = await getLocation();
+      console.log('[DEBUG-MYATTENDANCE] getLocation resolved:', pos ? { lat: pos.coords.latitude, lng: pos.coords.longitude } : null);
 
       const finalBody = {
         ...body,
@@ -130,12 +138,14 @@ export default function MyAttendance() {
         lng: pos?.coords.longitude ?? null,
       };
 
+      console.log('[DEBUG-MYATTENDANCE] sending POST request to', endpoint);
       const r = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalBody),
       });
       const d = await r.json();
+      console.log('[DEBUG-MYATTENDANCE] received response from', endpoint, ':', d);
 
       if (d.ok || d.success) {
         flash(getSuccessMsg(body, endpoint), true);
@@ -156,22 +166,31 @@ export default function MyAttendance() {
       } else {
         flash(d.error || 'Action failed. Please try again.', false);
       }
-    } catch {
+    } catch (err) {
+      console.error('[DEBUG-MYATTENDANCE] doAction caught error:', err);
       flash('Network error. Please check your connection and try again.', false);
     } finally {
       // Always reset — no path can leave the button stuck
       setClocking(false);
+      console.log('[DEBUG-MYATTENDANCE] doAction completed, clocking set to false');
     }
   };
 
   const handleActionWithSelfie = (endpoint: string, body: any) => {
+    console.log('[DEBUG-MYATTENDANCE] handleActionWithSelfie called for endpoint:', endpoint, 'with body:', body);
     setPendingAction({ endpoint, body });
     setShowSelfie(true);
+    console.log('[DEBUG-MYATTENDANCE] setPendingAction set, showSelfie set to true');
   };
 
   const onSelfieCaptured = async (image: string, faceFingerprint?: string) => {
-    if (!pendingAction) return;
+    console.log('[DEBUG-MYATTENDANCE] onSelfieCaptured invoked');
+    if (!pendingAction) {
+      console.warn('[DEBUG-MYATTENDANCE] onSelfieCaptured aborted: no pendingAction found');
+      return;
+    }
     const action = pendingAction;
+    console.log('[DEBUG-MYATTENDANCE] pendingAction found:', action.endpoint, action.body);
     // Clear pending state immediately to prevent double-submit
     setPendingAction(null);
     setShowSelfie(false);
@@ -206,7 +225,7 @@ export default function MyAttendance() {
 
   const breakPct = att?.totalBreakMins ? Math.min(100, Math.round((att.totalBreakMins / BREAK_LIMIT_MINS) * 100)) : 0;
   const transparencyMsg = att?.lateByMins > 0 && att?.shiftRules?.shiftStart && att?.checkInTime
-    ? `Late by ${att.lateByMins} mins (Shift: ${att.shiftRules.shiftStart} | Clock-in: ${new Date(att.checkInTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })} | Grace: ${att.shiftRules.graceMinutes} mins)`
+    ? `Late by ${formatHHMM(att.lateByMins)} (Shift: ${att.shiftRules.shiftStart} | Clock-in: ${new Date(att.checkInTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })} | Grace: ${formatHHMM(att.shiftRules.graceMinutes)})`
     : '';
   const saveCheckins = (next: any[]) => {
     clearTimeout(saveTimer.current);
@@ -297,33 +316,62 @@ export default function MyAttendance() {
 
             {/* Big Timer */}
             <div className="text-center my-6">
-              <div className="text-5xl font-bold tracking-widest" style={{ color: modeColor[workMode], fontVariantNumeric: 'tabular-nums' }}>
-                {fmtClock(getLiveWorkSeconds())}
+              <div className="text-xs mt-2 font-bold tracking-widest text-gray-400 uppercase mb-2">
+                {workMode === 'Break' ? 'Active Break Timer' : 'Break-Adjusted Productive Time'}
               </div>
-              <div className="text-xs mt-2" style={{ color: '#6b7280' }}>Effective Work Hours Today</div>
-              {att?.checkInTime && (
-                <div className="text-xs mt-1" style={{ color: '#6b7280' }}>
-                  Clocked in at {fmtTime(att.checkInTime)}
-                </div>
-              )}
+              <div className="text-5xl font-bold tracking-widest" style={{ color: modeColor[workMode], fontVariantNumeric: 'tabular-nums' }}>
+                {workMode === 'Break' ? formatHMS(getLiveBreakSeconds()) : formatHMS(getLiveWorkSeconds())}
+              </div>
             </div>
 
-            {/* Break Info */}
-            {(att?.totalBreakMins > 0 || att?.isOnBreak) && (
-              <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.12)' }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs" style={{ color: '#6b7280' }}>
-                    Break - {BREAK_LIMIT_MINS} min allowed
-                  </span>
-                  <span className="text-xs font-semibold" style={{ color: breakPct >= 100 ? '#ef4444' : '#f59e0b' }}>
-                    {att?.totalBreakFormatted || '0m'}
-                  </span>
+            {/* Operational Timestamp Visibility */}
+            {att?.firstCheckIn && (
+              <div className="grid grid-cols-2 gap-3 mb-6 p-4 rounded-xl border" style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}>
+                <div>
+                  <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Expected Login</div>
+                  <div className="text-sm font-semibold text-gray-800">{fmtHHMMtoISTLabel(att?.shiftRules?.shiftStart)}</div>
                 </div>
-                <div className="w-full rounded-full h-1.5" style={{ background: '#f3f4f6' }}>
-                  <div className="h-1.5 rounded-full transition-all" style={{ width: `${breakPct}%`, background: breakPct >= 100 ? '#ef4444' : '#f59e0b' }}/>
+                <div>
+                  <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Actual First In</div>
+                  <div className="text-sm font-semibold text-emerald-600">{fmtTime(att.firstCheckIn)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Late Duration</div>
+                  <div className="text-sm font-semibold" style={{ color: att?.lateByMins > 0 ? '#ef4444' : '#10b981' }}>
+                    {att?.lateByMins > 0 ? formatHHMM(att.lateByMins) : 'On Time'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Last Out</div>
+                  <div className="text-sm font-semibold text-gray-800">{att?.checkOutTime ? fmtTime(att.checkOutTime) : '--:--'}</div>
                 </div>
               </div>
             )}
+
+            {/* Break Analytics */}
+            <div className="mb-4 p-4 rounded-xl border" style={{ background: breakPct > 100 ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)', borderColor: breakPct > 100 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: breakPct > 100 ? '#ef4444' : '#d97706' }}>
+                  Total Break Duration
+                </span>
+                <span className="text-sm font-black" style={{ color: breakPct > 100 ? '#ef4444' : '#d97706' }}>
+                  {att?.totalBreakFormatted || '0m'} <span className="text-xs font-medium opacity-70">/ {BREAK_LIMIT_MINS}m</span>
+                </span>
+              </div>
+              <div className="w-full rounded-full h-2 bg-white mb-2 overflow-hidden border" style={{ borderColor: breakPct > 100 ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)' }}>
+                <div className="h-full transition-all duration-500" style={{ width: `${Math.min(100, breakPct)}%`, background: breakPct > 100 ? '#ef4444' : '#f59e0b' }}/>
+              </div>
+              {breakPct > 100 && (
+                <div className="text-[10px] font-bold text-red-600">
+                  ⚠️ Exceeded allowance by {formatHHMM(att.totalBreakMins - BREAK_LIMIT_MINS)}
+                </div>
+              )}
+              {att?.isOnBreak && att?.session?.breakStart && (
+                <div className="mt-3 text-[10px] font-semibold text-amber-700 bg-amber-100/50 p-2 rounded-lg inline-block">
+                  Current break started at {fmtTime(att.session.breakStart)}
+                </div>
+              )}
+            </div>
 
             {/* Geofence */}
             <div className="mb-5 p-3 rounded-xl flex items-center gap-2" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.12)' }}>
@@ -591,7 +639,7 @@ export default function MyAttendance() {
                 <div>
                   <div className="text-xs font-medium" style={{ color: '#6b7280' }}>Shift expected</div>
                   <div className="text-[10px]" style={{ color: '#9ca3af' }}>
-                    {fmtHHMMtoISTLabel(att?.shiftRules?.shiftStart)} IST (grace {att?.shiftRules?.graceMinutes ?? 15}m)
+                    {fmtHHMMtoISTLabel(att?.shiftRules?.shiftStart)} IST (grace {formatHHMM(att?.shiftRules?.graceMinutes ?? 15)})
                   </div>
                 </div>
               </div>

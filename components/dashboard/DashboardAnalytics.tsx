@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { TrendingUp, Clock, Calendar } from 'lucide-react';
+import { formatHHMM } from '@/lib/attendance-shared';
 
 interface TrendDay {
   date: string;
@@ -30,7 +31,7 @@ export function DashboardAnalytics({ trend, attendanceRate, punctualityRate, avg
 
   if (!trend || trend.length === 0) return null;
 
-  const avgWorkHours = avgWorkMins != null ? (avgWorkMins / 60).toFixed(1) : null;
+  const avgWorkHoursLabel = avgWorkMins != null ? `${formatHHMM(avgWorkMins)} avg` : null;
   const maxWork = Math.max(...trend.map(d => d.workMins), 1);
 
   const cards = [
@@ -44,7 +45,7 @@ export function DashboardAnalytics({ trend, attendanceRate, punctualityRate, avg
     },
     {
       label: 'Work Hours Trend',
-      value: avgWorkHours ? `${avgWorkHours}h avg` : '–',
+      value: avgWorkHoursLabel ? avgWorkHoursLabel : '–',
       icon: Clock,
       color: 'text-blue-500',
       bars: trend.map(d => ({ height: d.workMins > 0 ? Math.round((d.workMins / maxWork) * 100) : 5, active: d.workMins > 0 })),

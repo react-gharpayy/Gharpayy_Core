@@ -4,7 +4,6 @@ import { getAuthUser } from '@/lib/auth';
 import { getISTDateStr } from '@/lib/attendance-utils';
 import Attendance from '@/models/Attendance';
 import Task from '@/models/Task';
-import Leave from '@/models/Leave';
 import Tracker from '@/models/Tracker';
 
 export async function GET() {
@@ -25,15 +24,24 @@ export async function GET() {
       return getISTDateStr(d);
     })();
 
-    const [recentAttendance, tasks, leaves, tracker] = await Promise.all([
+    const [recentAttendance, tasks, tracker] = await Promise.all([
       Attendance.find({
         employeeId: userId,
         date: { $gte: sevenDaysAgo, $lte: today },
       }).sort({ date: 1 }).lean(),
 
-      Task.find({ assignedTo: userId }).sort({ createdAt: -1 }).lean(),
-
-      Leave.find({ employeeId: userId }).sort({ createdAt: -1 }).lean(),
+      Task.aggregate([
+        { $match: { assignedTo: userId } },
+        { $group: {
+            _id: null,
+            total: { $sum: 1 },
+            pending: { $sum: { $cond: [{ $in: ['$status', ['todo', 'in_progress']] }, 1, 0] } },
+            overdue: { $sum: { $cond: [{ $eq: ['$status', 'overdue'] }, 1, 0] } },
+            completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+            blocked: { $sum: { $cond: [{ $eq: ['$status', 'blocked'] }, 1, 0] } }
+          }
+        }
+      ]),
 
       Tracker.findOne({ employeeId: userId, date: today }).lean(),
     ]);
@@ -57,20 +65,16 @@ export async function GET() {
       : null;
 
     // ── Tasks summary ──────────────────────────────────────────
+    const tStats = tasks[0] || { total: 0, pending: 0, overdue: 0, completed: 0, blocked: 0 };
     const taskStats = {
-      total: tasks.length,
-      pending: tasks.filter((t: any) => t.status === 'todo' || t.status === 'in_progress').length,
-      overdue: tasks.filter((t: any) => t.status === 'overdue').length,
-      completed: tasks.filter((t: any) => t.status === 'completed').length,
-      blocked: tasks.filter((t: any) => t.status === 'blocked').length,
+      total: tStats.total,
+      pending: tStats.pending,
+      overdue: tStats.overdue,
+      completed: tStats.completed,
+      blocked: tStats.blocked,
     };
 
-    // ── Leaves summary ─────────────────────────────────────────
-    const leaveStats = {
-      pending: leaves.filter((l: any) => l.status === 'pending').length,
-      approved: leaves.filter((l: any) => l.status === 'approved').length,
-      total: leaves.length,
-    };
+
 
     // ── Pending actions for this employee ─────────────────────
     const pendingActions: { title: string; desc: string; urgency: string; href: string }[] = [];
@@ -83,14 +87,7 @@ export async function GET() {
         href: '/my-tasks',
       });
     }
-    if (leaveStats.pending > 0) {
-      pendingActions.push({
-        title: 'Leave Awaiting Approval',
-        desc: `${leaveStats.pending} leave request${leaveStats.pending > 1 ? 's' : ''} pending`,
-        urgency: 'medium',
-        href: '/my-leaves',
-      });
-    }
+
     if (taskStats.blocked > 0) {
       pendingActions.push({
         title: 'Blocked Tasks',
@@ -112,7 +109,6 @@ export async function GET() {
         avgWorkMins,
       },
       taskStats,
-      leaveStats,
       pendingActions,
       checkins,
     });

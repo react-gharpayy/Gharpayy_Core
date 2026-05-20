@@ -7,12 +7,12 @@ import Tracker from '@/models/Tracker';
 import User from '@/models/User';
 import CoachingSession from '@/models/CoachingSession';
 import { getAuthUser } from '@/lib/auth';
-import { isElevated } from '@/lib/role-guards';
+import { canAccessCoaching } from '@/lib/permissions';
 
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || !isElevated(user)) {
+    if (!user || !canAccessCoaching(user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

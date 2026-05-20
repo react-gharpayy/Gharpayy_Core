@@ -14,6 +14,7 @@ import { notifyLateAlert } from '@/lib/system-notifications';
 import User from '@/models/User';
 import Tracker from '@/models/Tracker';
 import { emitGrowthEvent } from '@/lib/growth-events';
+import { logAttendanceAudit } from '@/lib/audit-logger';
 
 function fmtISTTimeLabel(date: Date) {
   return new Date(date).toLocaleTimeString('en-IN', {
@@ -71,7 +72,18 @@ export async function POST(req: NextRequest) {
     const rules = applyUserSchedule(baseRules, dbUser?.workSchedule);
 
     const date = getISTDateStr();
-    let att = await Attendance.findOne({ employeeId: user.id, date });
+    let att = await Attendance.findOne({
+      employeeId: user.id,
+      $or: [{ isCheckedIn: true }, { isOnBreak: true }, { isInField: true }]
+    }).sort({ date: -1 });
+
+    if (!att) {
+      att = await Attendance.findOne({ employeeId: user.id, date });
+    }
+    
+    if (att) {
+      recomputeAttendanceTotals(att);
+    }
 
     // Ensure daily tracker record exists once employee clocks in
     const existingTracker = await Tracker.findOne({ employeeId: user.id, date });
@@ -109,12 +121,10 @@ export async function POST(req: NextRequest) {
         last.minutes = mins;
       }
       att.sessions.push({ checkIn: now, checkOut: null, type: 'work', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice, selfieImage });
-      att.isCheckedIn = true;
-      att.isOnBreak = false;
-      att.workMode = 'Present';
       recomputeAttendanceTotals(att);
       att.markModified('sessions');
       await att.save();
+      logAttendanceAudit({ employeeId: user.id, attendanceId: att._id.toString(), action: 'break_end', date: att.date, actorId: user.id });
       return NextResponse.json({ ok: true, checkInTime: now.toISOString(), action: 'break_end' });
     }
 
@@ -128,12 +138,10 @@ export async function POST(req: NextRequest) {
         last.workMinutes = mins;
       }
       att.sessions.push({ checkIn: now, checkOut: null, type: 'work', minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice, selfieImage });
-      att.isCheckedIn = true;
-      att.isInField = false;
-      att.workMode = 'Present';
       recomputeAttendanceTotals(att);
       att.markModified('sessions');
       await att.save();
+      logAttendanceAudit({ employeeId: user.id, attendanceId: att._id.toString(), action: 'field_return', date: att.date, actorId: user.id });
       return NextResponse.json({ ok: true, checkInTime: now.toISOString(), action: 'field_return' });
     }
 
@@ -159,8 +167,6 @@ export async function POST(req: NextRequest) {
       });
     } else {
       att.sessions.push({ checkIn: now, checkOut: null, type: sessionType, minutes: 0, workMinutes: 0, lat: lat || null, lng: lng || null, inOffice, selfieImage });
-      att.isCheckedIn = true;
-      att.workMode = 'Present';
       if (att.sessions.length === 1) {
         const status = getStatusByShiftRules(now, rules);
         att.dayStatus = status.dayStatus;
@@ -172,6 +178,7 @@ export async function POST(req: NextRequest) {
     recomputeAttendanceTotals(att);
     att.markModified('sessions');
     await att.save();
+    logAttendanceAudit({ employeeId: user.id, attendanceId: att._id.toString(), action: 'check_in', date: att.date, actorId: user.id });
     
     // Growth Engine Integration: Award XP for on-time/early attendance
     if (att.dayStatus === 'On Time' || att.dayStatus === 'Early') {

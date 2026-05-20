@@ -18,7 +18,7 @@ import { XPBar } from '@/modules/growth/components/XPBar';
 import { StreakWidget } from '@/modules/growth/components/StreakWidget';
 import { AchievementBadge } from '@/modules/growth/components/AchievementBadge';
 import { Trophy, Target, ChevronRight, Sparkles as SparklesIcon } from 'lucide-react';
-import { useRouter as useNextRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 function fmtClock(secs: number) {
   const h = Math.floor(secs / 3600);
@@ -27,8 +27,16 @@ function fmtClock(secs: number) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function Dashboard() {
-  const [user, setUser] = useState<any>(null);
+interface DashboardUser {
+  id: string;
+  role: string;
+  fullName?: string;
+  email?: string;
+  growthEngineEnabled?: boolean;
+}
+
+export default function Dashboard({ initialUser }: { initialUser?: DashboardUser }) {
+  const [user, setUser] = useState<DashboardUser | undefined>(initialUser);
   const [att, setAtt] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
@@ -37,10 +45,11 @@ export default function Dashboard() {
   const [activityLoading, setActivityLoading] = useState(true);
   const [isKudoOpen, setIsKudoOpen] = useState(false);
   const [showSelfie, setShowSelfie] = useState(false);
-  const [pendingAction, setPendingAction] = useState<any>(null);
+  const [pendingAction, setPendingAction] = useState<{ endpoint: string; body: any } | null>(null);
   const [growth, setGrowth] = useState<any>(null);
+  const [actionPending, setActionPending] = useState(false);
   const { toast } = useToast();
-  const router = useNextRouter();
+  const router = useRouter();
 
   const fetchAtt = async () => {
     try {
@@ -78,7 +87,9 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d)).catch(() => {});
+    if (!initialUser) {
+      fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d)).catch(() => {});
+    }
     fetchAtt();
     fetchSummary();
     fetchActivity();
@@ -113,37 +124,83 @@ export default function Dashboard() {
     return t;
   }) || [];
 
+  const getLocation = (): Promise<GeolocationPosition | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) { resolve(null); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve(pos),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+      );
+    });
+  };
+
   const handleAction = async (endpoint: string, body: any = {}) => {
+    console.log('[DEBUG-DASHBOARD] handleAction called for endpoint:', endpoint, 'with body keys:', Object.keys(body));
+    if (actionPending) {
+      console.warn('[DEBUG-DASHBOARD] handleAction aborted because actionPending is true');
+      return;
+    }
+    setActionPending(true);
     try {
+      console.log('[DEBUG-DASHBOARD] fetching geolocation...');
+      const pos = await getLocation();
+      const finalBody = {
+        ...body,
+        lat: pos?.coords.latitude ?? null,
+        lng: pos?.coords.longitude ?? null,
+      };
+
+      console.log('[DEBUG-DASHBOARD] sending POST request to', endpoint);
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(finalBody),
       });
       const data = await res.json();
+      console.log('[DEBUG-DASHBOARD] received response from', endpoint, ':', data);
       if (data.ok || data.success) {
         toast({ title: 'Success', description: data.action === 'checkout' ? 'Clocked out successfully' : 'Action completed.' });
-        fetchAtt();
-        fetchActivity(); 
+        await fetchAtt();
+        await fetchActivity(); 
       } else {
         toast({ title: 'Error', description: data.error || 'Action failed', variant: 'destructive' });
       }
-    } catch {
+    } catch (error) {
+      console.error('[DEBUG-DASHBOARD] request failed with error:', error);
       toast({ title: 'Error', description: 'Something went wrong', variant: 'destructive' });
+    } finally {
+      setActionPending(false);
+      console.log('[DEBUG-DASHBOARD] handleAction completed, actionPending set to false');
     }
   };
 
   const handleActionWithSelfie = (endpoint: string, body: any = {}) => {
+    console.log('[DEBUG-DASHBOARD] handleActionWithSelfie called for endpoint:', endpoint, 'with body:', body);
+    if (actionPending) {
+      console.warn('[DEBUG-DASHBOARD] handleActionWithSelfie aborted because actionPending is true');
+      return;
+    }
     setPendingAction({ endpoint, body });
     setShowSelfie(true);
+    console.log('[DEBUG-DASHBOARD] setPendingAction set, showSelfie set to true');
   };
 
-  const onSelfieCaptured = (image: string) => {
-    if (!pendingAction) return;
+  const onSelfieCaptured = (image: string, faceFingerprint?: string) => {
+    console.log('[DEBUG-DASHBOARD] onSelfieCaptured invoked');
+    if (!pendingAction) {
+      console.warn('[DEBUG-DASHBOARD] onSelfieCaptured aborted: no pendingAction found');
+      return;
+    }
     const { endpoint, body } = pendingAction;
+    console.log('[DEBUG-DASHBOARD] pendingAction found:', endpoint, body);
     setPendingAction(null);
     setShowSelfie(false);
-    handleAction(endpoint, { ...body, selfieImage: image });
+    handleAction(endpoint, {
+      ...body,
+      selfieImage: image,
+      faceFingerprint: faceFingerprint || ''
+    });
   };
 
   return (
@@ -164,7 +221,12 @@ export default function Dashboard() {
               if (att?.isCheckedIn) handleActionWithSelfie('/api/attendance/checkout', { type: 'checkout' });
               else handleActionWithSelfie('/api/attendance/checkin');
             }}
+            onBreakToggle={() => {
+              if (att?.isOnBreak) handleActionWithSelfie('/api/attendance/checkin', { type: 'break_end' });
+              else handleAction('/api/attendance/checkout', { type: 'break_start' });
+            }}
             onGiveKudo={() => setIsKudoOpen(true)}
+            processing={actionPending}
           />
 
           <DashboardAnalytics
@@ -180,6 +242,7 @@ export default function Dashboard() {
             <div className="xl:col-span-2 space-y-8">
               <AttendanceCard
                 status={att}
+                loading={attLoading}
                 onPunchIn={() => handleActionWithSelfie('/api/attendance/checkin')}
                 onPunchOut={() => handleActionWithSelfie('/api/attendance/checkout', { type: 'checkout' })}
                 onToggleBreak={() => {
@@ -191,7 +254,6 @@ export default function Dashboard() {
               <div className="hidden xl:block">
                 <DailyStats
                   taskStats={summary?.taskStats ?? null}
-                  leaveStats={summary?.leaveStats ?? null}
                   attendanceRate={summary?.stats?.attendanceRate ?? null}
                   punctualityRate={summary?.stats?.punctualityRate ?? null}
                   avgWorkMins={summary?.stats?.avgWorkMins ?? null}
@@ -210,7 +272,6 @@ export default function Dashboard() {
               <div className="xl:hidden">
                 <DailyStats
                   taskStats={summary?.taskStats ?? null}
-                  leaveStats={summary?.leaveStats ?? null}
                   attendanceRate={summary?.stats?.attendanceRate ?? null}
                   punctualityRate={summary?.stats?.punctualityRate ?? null}
                   avgWorkMins={summary?.stats?.avgWorkMins ?? null}

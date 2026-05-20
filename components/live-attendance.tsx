@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { formatHHMM } from '@/lib/attendance-shared';
 import { Filter, RefreshCw, ChevronRight, X, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 
 interface Employee {
@@ -16,6 +17,7 @@ interface Employee {
   workMode?: string;
   lateByMins?: number;
   earlyByMins?: number;
+  anomalies?: string[];
 }
 
 interface DrillDown {
@@ -61,10 +63,6 @@ function avColor(name: string) {
 }
 function initials(name: string) {
   return name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
-}
-function fmtMins(m: number) {
-  if (!m) return '0m'; const h = Math.floor(m / 60); const min = m % 60;
-  return h > 0 ? `${h}h ${min}m` : `${min}m`;
 }
 function fmtISTTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
@@ -198,7 +196,8 @@ export default function LiveAttendance() {
       })
       .catch(err => console.error('[LiveAttendance] Fetch failed:', err))
       .finally(() => setLoading(false));
-  }, [selectedDate, selectedZone, selectedManager, statusFilter, dateFrom, dateTo, rangeMode, all.length]);
+  }, [selectedDate, selectedZone, selectedManager, statusFilter, dateFrom, dateTo, rangeMode]);
+  // NOTE: all.length intentionally excluded — adding it would reset the polling interval on every data update
 
   // Keep the ref in sync
   useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
@@ -300,13 +299,22 @@ export default function LiveAttendance() {
 
   // Staged rendering state: load only first 50 then more to prevent blocking
   const [visibleCount, setVisibleCount] = useState(50);
-  useEffect(() => { setVisibleCount(50); }, [filter, all]);
+  useEffect(() => { setVisibleCount(50); }, [filter, selectedDate, selectedZone, selectedManager, statusFilter, rangeMode]);
 
   const visibleEmployees = useMemo(() => filteredEmployees.slice(0, visibleCount), [filteredEmployees, visibleCount]);
 
+  // Defer break-report: it's below the fold; give heatmap 600ms headstart to avoid competing on initial page load
+  const [breakReportReady, setBreakReportReady] = useState(false);
   useEffect(() => {
+    const t = setTimeout(() => setBreakReportReady(true), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!breakReportReady) return;
     fetchBreakReport();
-  }, [breakMode, selectedDate, dateFrom, dateTo, selectedZone, selectedManager]);
+  }, [breakMode, selectedDate, dateFrom, dateTo, selectedZone, selectedManager, breakReportReady]);
+  // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDrill = async (empId: string) => {
     setDrillLoading(true); setDrill(null);
@@ -452,7 +460,7 @@ export default function LiveAttendance() {
         {shiftInfo && (
           <>
             <div className="mt-3 px-3 py-2 rounded-xl text-xs" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)', color: '#6b7280' }}>
-              Shift {fmtHHMMtoISTLabel(shiftInfo.shiftStart || rulesForm.shiftStart)} - {fmtHHMMtoISTLabel(shiftInfo.shiftEnd || rulesForm.shiftEnd)} IST | Grace {shiftInfo.graceMinutes ?? rulesForm.graceMinutes}m
+              Shift {fmtHHMMtoISTLabel(shiftInfo.shiftStart || rulesForm.shiftStart)} - {fmtHHMMtoISTLabel(shiftInfo.shiftEnd || rulesForm.shiftEnd)} IST | Grace {formatHHMM(shiftInfo.graceMinutes ?? rulesForm.graceMinutes)}
             </div>
             {userRole === 'admin' && (
               <div className="mt-2 grid grid-cols-4 gap-2">
@@ -547,20 +555,48 @@ export default function LiveAttendance() {
                       style={{ background: mc.dot, borderColor: '#ffffff' }}/>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">{emp.employeeName}</div>
+                    <div className="text-sm font-medium text-gray-900 truncate flex items-center gap-2">
+                      {emp.employeeName}
+                      {emp.anomalies && emp.anomalies.includes('excessive_break') && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-red-100 text-red-600 uppercase tracking-widest border border-red-200" title="Excessive Break Duration">Excessive Break</span>
+                      )}
+                      {emp.anomalies && emp.anomalies.includes('severe_late') && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-orange-100 text-orange-600 uppercase tracking-widest border border-orange-200" title="Over 01:00 late">Severe Late</span>
+                      )}
+                      {emp.anomalies && emp.anomalies.includes('long_active_session') && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-100 text-purple-700 uppercase tracking-widest border border-purple-200" title="Session active > 12 hours">Stale Session</span>
+                      )}
+                    </div>
                     <div className="text-[10px]" style={{ color: '#6b7280' }}>
                       {playbookRoles.find(r => r.slug === (emp as any).playbookRole)?.name || (emp as any).playbookRole || 'Recruiter'} · {emp.team}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="text-right">
-                      <div className="text-xs" style={{ color: '#6b7280' }}>{emp.checkInTime || '--'}</div>
-                      {(emp as any).lateByMins > 0 && <div className="text-[10px]" style={{ color: '#f59e0b' }}>Late {(emp as any).lateByMins}m</div>}
-                      {(emp as any).earlyByMins > 0 && <div className="text-[10px]" style={{ color: '#10b981' }}>Early {(emp as any).earlyByMins}m</div>}
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: mc.bg, color: mc.text }}>{mode}</span>
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <div className="hidden sm:block text-right">
+                      <div className="text-[10px] text-gray-500 uppercase font-bold">Productive</div>
+                      <div className="text-sm font-bold" style={{ color: '#10b981' }}>{formatHHMM(emp.totalWorkMins)}</div>
                     </div>
-                    <ChevronRight className="w-4 h-4" style={{ color: '#9ca3af' }} />
+                    <div className="hidden sm:block text-right w-16">
+                      <div className="text-[10px] text-gray-500 uppercase font-bold">Break</div>
+                      <div className="text-sm font-bold" style={{ color: emp.totalBreakMins && emp.totalBreakMins > 45 ? '#ef4444' : '#f59e0b' }}>
+                        {formatHHMM(emp.totalBreakMins || 0)}
+                      </div>
+                    </div>
+                    <div className="text-right w-20">
+                      <div className="text-xs font-semibold text-gray-900">{emp.checkInTime || '--:--'}</div>
+                      {(emp as any).lateByMins > 0 ? (
+                        <div className="text-[10px] font-bold text-red-500">Late {formatHHMM((emp as any).lateByMins)}</div>
+                      ) : (emp as any).earlyByMins > 0 ? (
+                        <div className="text-[10px] font-bold text-emerald-500">Early {formatHHMM((emp as any).earlyByMins)}</div>
+                      ) : (
+                        <div className="text-[10px] font-medium text-gray-400">On Time</div>
+                      )}
+                      <div className="mt-0.5">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider"
+                          style={{ background: mc.bg, color: mc.text }}>{mode}</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 ml-1" style={{ color: '#9ca3af' }} />
                   </div>
                 </button>
               );

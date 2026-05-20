@@ -59,7 +59,8 @@ const AttendanceSchema = new Schema<IAttendance>({
   collection: 'gpattendances'
 });
 
-AttendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
+AttendanceSchema.index({ employeeId: 1, date: -1 }, { unique: true });
+AttendanceSchema.index({ isCheckedIn: 1 });
 AttendanceSchema.index({ date: 1 });
 
 export default mongoose.models?.GpAttendance || mongoose.model<IAttendance>('GpAttendance', AttendanceSchema);

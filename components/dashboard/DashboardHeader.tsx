@@ -3,6 +3,7 @@ import React from 'react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles } from 'lucide-react';
+import { formatHHMM } from '@/lib/attendance-shared';
 
 interface DashboardHeaderProps {
   user: any;
@@ -43,13 +44,17 @@ export function DashboardHeader({ user, attendance, growthLevel }: DashboardHead
 
   const liveWorkMins = getLiveWorkMins();
 
-  const statusLabel = isClockedIn
-    ? isOnBreak ? 'On Break' : 'Clocked In & Active'
-    : 'Not Clocked In';
+  const statusLabel = isOnBreak
+    ? 'On Break'
+    : isClockedIn
+      ? 'Clocked In & Active'
+      : 'Not Clocked In';
 
-  const statusColor = isClockedIn
-    ? isOnBreak ? 'bg-orange-500' : 'bg-emerald-500'
-    : 'bg-gray-300';
+  const statusColor = isOnBreak
+    ? 'bg-orange-500'
+    : isClockedIn
+      ? 'bg-emerald-500'
+      : 'bg-gray-300';
 
   const role = user?.playbookRole || user?.role || 'employee';
 
@@ -85,7 +90,7 @@ export function DashboardHeader({ user, attendance, growthLevel }: DashboardHead
           <div className="space-y-1">
             <p className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest leading-none">Work Today</p>
             <p className="text-sm font-black text-gray-900">
-              {Math.floor(liveWorkMins / 60)}h {liveWorkMins % 60}m
+              {formatHHMM(liveWorkMins)}
             </p>
           </div>
         ) : (

@@ -136,10 +136,15 @@ export async function GET() {
     const lastClosedSession = [...att.sessions].reverse().find((s: any) => !!s.checkOut);
     recomputeAttendanceTotals(att);
     const derived = deriveStatusFromAttendance(att, rules);
+    let changed = false;
     if (att.dayStatus !== derived.dayStatus || (att.lateByMins || 0) !== derived.lateByMins || (att.earlyByMins || 0) !== derived.earlyByMins) {
       att.dayStatus = derived.dayStatus;
       att.lateByMins = derived.lateByMins;
       att.earlyByMins = derived.earlyByMins;
+      changed = true;
+    }
+    if (changed || att.isModified()) {
+      att.markModified('sessions');
       await att.save();
     }
     const timeline = [];

@@ -194,36 +194,38 @@ export default function SelfieCapture({ open, onClose, onCapture }: SelfieCaptur
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const smileR = bs.find((c: any) => c.categoryName === 'mouthSmileRight')?.score || 0;
 
-        setStep(prev => {
-          const next =
-            prev === 'blink'     && (eyeBlinkLeft > 0.4 || eyeBlinkRight > 0.4) ? 'challenge' :
-            prev === 'challenge' && (smileL > 0.5 || smileR > 0.5)               ? 'done' :
-            prev;
+        let nextStep: LivenessStep = stepRef.current;
+        if (stepRef.current === 'blink' && (eyeBlinkLeft > 0.4 || eyeBlinkRight > 0.4)) {
+          nextStep = 'challenge';
+        } else if (stepRef.current === 'challenge' && (smileL > 0.5 || smileR > 0.5)) {
+          nextStep = 'done';
+        }
 
-          if (next === 'done' && !hasCapturedRef.current) {
-            hasCapturedRef.current = true;
-            setCapturing(true);
+        if (nextStep !== stepRef.current) {
+          setStep(nextStep);
+        }
 
-            if (animationRef.current) {
-              cancelAnimationFrame(animationRef.current);
-              animationRef.current = null;
-            }
+        if (nextStep === 'done' && !hasCapturedRef.current) {
+          hasCapturedRef.current = true;
+          setCapturing(true);
 
-            requestAnimationFrame(() => {
-              try {
-                handleCapture();
-              } catch (err) {
-                console.error('Capture failed:', err);
-                hasCapturedRef.current = false;
-                setCapturing(false);
-                setStep('blink');
-                setError('Capture failed. Please try again.');
-              }
-            });
+          if (animationRef.current) {
+            cancelAnimationFrame(animationRef.current);
+            animationRef.current = null;
           }
 
-          return next;
-        });
+          requestAnimationFrame(() => {
+            try {
+              handleCapture();
+            } catch (err) {
+              console.error('Capture failed:', err);
+              hasCapturedRef.current = false;
+              setCapturing(false);
+              setStep('blink');
+              setError('Capture failed. Please try again.');
+            }
+          });
+        }
       }
     } catch (err) {
       console.warn('Detection frame error:', err);
@@ -296,6 +298,7 @@ export default function SelfieCapture({ open, onClose, onCapture }: SelfieCaptur
     ctx.font = 'bold 12px Inter, sans-serif';
     ctx.fillText('VERIFIED LIVE', w - 140, h - 35);
 
+    console.log('[DEBUG-SELFIE] doCapture executing with location:', loc);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
 
     if (streamRef.current) {
@@ -303,7 +306,9 @@ export default function SelfieCapture({ open, onClose, onCapture }: SelfieCaptur
       streamRef.current = null;
     }
 
+    console.log('[DEBUG-SELFIE] invoking onCapture callback');
     onCapture(dataUrl);
+    console.log('[DEBUG-SELFIE] invoking onClose callback');
     onClose();
   };
 

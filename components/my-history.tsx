@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import EmployeeSidebar from '@/components/employee-sidebar';
 import { Calendar } from 'lucide-react';
+import { formatHHMM } from '@/lib/attendance-shared';
 
 interface AttRecord {
   date: string;
@@ -22,11 +23,6 @@ const STATUS_COLOR: Record<string, { color: string; bg: string }> = {
   'Late':    { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)'  },
   'Absent':  { color: '#ef4444', bg: 'rgba(239,68,68,0.12)'   },
 };
-
-function fmtMins(m: number) {
-  if (!m) return '--'; const h = Math.floor(m / 60); const min = m % 60;
-  return h > 0 ? `${h}h ${min}m` : `${min}m`;
-}
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
@@ -127,9 +123,9 @@ export default function MyHistory() {
                   {records.map(r => {
                     const sc = STATUS_COLOR[r.dayStatus] || STATUS_COLOR.Absent;
                     const variance = r.dayStatus === 'Late'
-                      ? `+${r.lateByMins || 0}m`
+                      ? `+${formatHHMM(r.lateByMins || 0)}`
                       : r.dayStatus === 'Early'
-                        ? `-${r.earlyByMins || 0}m`
+                        ? `-${formatHHMM(r.earlyByMins || 0)}`
                         : '--';
                     return (
                       <div key={r.date} className="grid grid-cols-4 px-4 py-3 items-center hover:bg-gray-50 transition">
@@ -141,7 +137,7 @@ export default function MyHistory() {
                         </div>
                         <div className="text-sm" style={{ color: '#6b7280' }}>{variance}</div>
                         <div className="text-sm" style={{ color: '#6b7280' }}>
-                          {r.dayStatus === 'Absent' ? '--' : fmtMins(r.totalWorkMins) || '--'}
+                          {r.dayStatus === 'Absent' ? '--' : formatHHMM(r.totalWorkMins) || '--'}
                         </div>
                       </div>
                     );

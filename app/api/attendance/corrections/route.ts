@@ -9,6 +9,7 @@ import { deriveStatusFromAttendance, getShiftRules, recomputeAttendanceTotals } 
 import { correctionSchema } from '@/lib/validations';
 import { ZodError } from 'zod';
 import { maybeCreditCompOff } from '@/lib/comp-off';
+import { logAttendanceAudit } from '@/lib/audit-logger';
 
 function toDateInIST(date: string, time: string) {
   const [y, m, d] = date.split('-').map(Number);
@@ -56,10 +57,6 @@ export async function POST(req: NextRequest) {
 
     const minutes = Math.max(0, Math.floor((outDate.getTime() - inDate.getTime()) / 60000));
     att.sessions.push({ checkIn: inDate, checkOut: outDate, type: 'work', minutes, workMinutes: minutes, lat: null, lng: null });
-    att.isCheckedIn = false;
-    att.isOnBreak = false;
-    att.isInField = false;
-    att.workMode = 'Present';
     recomputeAttendanceTotals(att);
     const rules = await getShiftRules();
     const derived = deriveStatusFromAttendance(att, rules);
@@ -80,6 +77,15 @@ export async function POST(req: NextRequest) {
       reviewedByName: user.fullName || user.email || 'Admin',
       reviewNote: `Corrected to ${clockIn}-${clockOut}`,
       reviewedAt: new Date(),
+    });
+
+    logAttendanceAudit({
+      employeeId,
+      attendanceId: att._id.toString(),
+      action: 'correction',
+      date: att.date,
+      actorId: user.id,
+      metadata: { reason, clockIn, clockOut, priorState: 'Session appended manually' }
     });
 
     try {

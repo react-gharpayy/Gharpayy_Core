@@ -260,12 +260,53 @@ export async function GET(req: NextRequest) {
       return b.riskScore - a.riskScore;
     });
 
+    const topSuggestions = suggestedSessions.slice(0, 9);
+
+    if (topSuggestions.length > 0) {
+      try {
+        const { AIProvider } = await import('@/lib/ai-provider');
+        const promptContext = topSuggestions.map(s => 
+          `ID: ${s.employeeId}
+Type: ${s.type}
+RiskScore: ${s.riskScore}
+Factors: ${s.reasons.join(', ')}`
+        ).join('\n\n');
+
+        const systemPrompt = `You are an Elite Workforce Operations Strategist. I will provide a list of employees flagged for intervention with their raw factors.
+For each employee, synthesize the factors into a single 1-2 sentence managerial interpretation and reasoning for the intervention.
+Focus on operational context, accountability, and burnout risks. Keep it concise, max 2-3 lines per person.
+Example: "Repeated late logins combined with declining tracker consistency indicate operational disengagement rather than temporary overload."
+Return ONLY a valid JSON array of strings, in the exact same order as the inputs. Do not wrap in markdown blocks.`;
+
+        const aiResponse = await AIProvider.generateChatCompletion([
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: promptContext }
+        ], { maxTokens: 1000, temperature: 0.3 });
+        
+        let aiReasonings = [];
+        try {
+           const text = aiResponse.content.trim().replace(/^\s*```json/i, '').replace(/```\s*$/, '');
+           aiReasonings = JSON.parse(text);
+        } catch(e) {
+           console.error('Failed to parse AI reasonings', e);
+        }
+        
+        if (Array.isArray(aiReasonings) && aiReasonings.length === topSuggestions.length) {
+          topSuggestions.forEach((s, idx) => {
+            s.reasons = [aiReasonings[idx]];
+          });
+        }
+      } catch (e) {
+        console.error('AI Reasoning generation failed', e);
+      }
+    }
+
     const duration = Date.now() - startTime;
     const finalData = {
       needsAttention,
       highPerformers,
       onTrack,
-      suggestedSessions: suggestedSessions.slice(0, 9),
+      suggestedSessions: topSuggestions,
       debug,
       analysisInfo: { period: 'Last 30 Days', analyzedAt: new Date().toISOString(), employeeCount: employees.length, activeWithData: debug.length, computeTimeMs: duration }
     };
